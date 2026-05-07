@@ -1,9 +1,16 @@
 # Schema relationship diagram
 
-Reference for the data model defined in `schema.prisma`. Update this file when
-adding/removing tables or changing cardinalities.
+Reference for the data model defined in `schema.prisma`. Update this file
+when adding/removing tables or changing cardinalities. The diagram below
+is the rendered SVG export of the Mermaid source that follows it — keep
+the two in sync when you edit the schema.
 
 ## ER diagram
+
+![Interview Assistant ER diagram](./schema.svg)
+
+<details>
+<summary>Mermaid source (click to expand)</summary>
 
 ```mermaid
 erDiagram
@@ -14,6 +21,7 @@ erDiagram
     Session  ||--o| FinalArtifacts : "FinalArtifacts.session_id → Session.id (PK+FK)"
     PhaseEvaluation ||--o| EvaluationAudit : "EvaluationAudit.phase_evaluation_id → PhaseEvaluation.id (UNIQUE)"
     PhaseEvaluation ||--o| MentorArtifact : "MentorArtifact.phase_evaluation_id → PhaseEvaluation.id (UNIQUE)"
+    PhaseEvaluation ||--o| SignalMentorArtifact : "SignalMentorArtifact.phase_evaluation_id → PhaseEvaluation.id (UNIQUE)"
 
     Question {
         uuid id PK
@@ -73,10 +81,21 @@ erDiagram
     MentorArtifact {
         uuid id PK
         uuid phase_evaluation_id FK "UNIQUE"
-        jsonb strengths "[{ topic, principle }] x 2-3"
-        jsonb gaps "[{ topic, concept }] x 2-3"
-        jsonb defensible_decision "{ decision, alternative }"
-        text closing "optional sign-off paragraph"
+        text content "Markdown — 6-section deep-dive teaching artifact"
+        text model_used
+        int tokens_in
+        int tokens_out
+        int cache_read_tokens
+        int cache_creation_tokens
+        int latency_ms
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    SignalMentorArtifact {
+        uuid id PK
+        uuid phase_evaluation_id FK "UNIQUE"
+        jsonb annotations "{signal_id → coaching string} for gap signals only"
         text model_used
         int tokens_in
         int tokens_out
@@ -111,6 +130,8 @@ erDiagram
     }
 ```
 
+</details>
+
 ## Relationships
 
 Each row reads "child.foreign_key → parent.primary_key" — that's the column
@@ -124,7 +145,8 @@ linkage Postgres uses to enforce the relationship.
 | Session → AIInteraction | 1 : N | `ai_interactions.session_id` → `sessions.id` | `Cascade` | Hint chat log. |
 | Session → FinalArtifacts | 1 : 0..1 | `final_artifacts.session_id` → `sessions.id` (also PK on the child, which enforces 0..1) | `Cascade` | Optional snapshot of the session's final output (one per session). |
 | PhaseEvaluation → EvaluationAudit | 1 : 0..1 | `evaluation_audits.phase_evaluation_id` → `phase_evaluations.id` (UNIQUE on child, which enforces 0..1) | `Cascade` | One audit per evaluation. Deleting an evaluation drops its audit. |
-| PhaseEvaluation → MentorArtifact | 1 : 0..1 | `mentor_artifacts.phase_evaluation_id` → `phase_evaluations.id` (UNIQUE on child) | `Cascade` | Optional mentor reflection per evaluation, generated on user request. |
+| PhaseEvaluation → MentorArtifact | 1 : 0..1 | `mentor_artifacts.phase_evaluation_id` → `phase_evaluations.id` (UNIQUE on child) | `Cascade` | Optional 6-section mentor reflection per evaluation. Fired in the background after eval persists. |
+| PhaseEvaluation → SignalMentorArtifact | 1 : 0..1 | `signal_mentor_artifacts.phase_evaluation_id` → `phase_evaluations.id` (UNIQUE on child) | `Cascade` | Optional per-signal coaching map — `{signal_id → annotation}` populated only for gap signals (missed-good, fired-bad). Fired in the background after eval persists. |
 
 ## Design highlights
 
