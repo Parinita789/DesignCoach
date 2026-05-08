@@ -33,7 +33,7 @@ export class MentorAgent {
         `signals=${Object.keys(input.signalResults).length})`,
     );
 
-    const llmStart = Date.now();
+    const llmStart = performance.now();
     const response = await this.llm.call(
       [{ role: ChatRole.User, content: built.userMessage }],
       {
@@ -43,7 +43,7 @@ export class MentorAgent {
         ...(input.model ? { model: input.model } : {}),
       },
     );
-    const latencyMs = Date.now() - llmStart;
+    const latencyMs = Math.round(performance.now() - llmStart);
 
     this.logger.log(
       `Mentor artifact ready in ${latencyMs}ms ` +

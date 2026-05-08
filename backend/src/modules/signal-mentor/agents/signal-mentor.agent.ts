@@ -41,7 +41,7 @@ export class SignalMentorAgent {
         `(planMd=${truncated.text.length} chars, gaps=${gapIds.length}, useTools=${useTools})`,
     );
 
-    const llmStart = Date.now();
+    const llmStart = performance.now();
     const response = await this.llm.call(
       [{ role: ChatRole.User, content: built.userMessage }],
       {
@@ -54,7 +54,7 @@ export class SignalMentorAgent {
         ...(input.model ? { model: input.model } : {}),
       },
     );
-    const latencyMs = Date.now() - llmStart;
+    const latencyMs = Math.round(performance.now() - llmStart);
 
     this.logger.log(
       `Signal-mentor ready in ${latencyMs}ms ` +

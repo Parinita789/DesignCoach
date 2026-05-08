@@ -53,7 +53,7 @@ export class BuildAgent extends BasePhaseAgent {
 
     const { systemBlocks, userMessage } = buildBuildPrompt(rubric, inputForPrompt, { useTools });
 
-    const llmStart = Date.now();
+    const llmStart = performance.now();
     const llm = await this.llm.call(
       [{ role: ChatRole.User, content: userMessage }],
       {
@@ -69,7 +69,7 @@ export class BuildAgent extends BasePhaseAgent {
         ...(input.model ? { model: input.model } : {}),
       },
     );
-    const latencyMs = Date.now() - llmStart;
+    const latencyMs = Math.round(performance.now() - llmStart);
 
     this.logger.log(
       `LLM responded in ${latencyMs}ms (model=${llm.modelUsed}, in=${llm.tokensIn}, ` +
