@@ -71,19 +71,19 @@ describe('validateEvalToolArgs', () => {
   it('rejects when top-level signals object is missing', () => {
     const args = ok() as Record<string, unknown>;
     delete args.signals;
-    expect(() => validateEvalToolArgs(args, SIGNALS)).toThrow(/missing or invalid "signals"/);
+    expect(() => validateEvalToolArgs(args, SIGNALS)).toThrow(/missing or invalid "signals"/i);
   });
 
   it('rejects when feedback is missing', () => {
     const args = ok() as Record<string, unknown>;
     delete args.feedback;
-    expect(() => validateEvalToolArgs(args, SIGNALS)).toThrow(/missing or non-string "feedback"/);
+    expect(() => validateEvalToolArgs(args, SIGNALS)).toThrow(/missing or non-string "feedback"/i);
   });
 
   it('rejects non-array top_actions', () => {
     const args = ok() as Record<string, unknown>;
     args.top_actions = 'not an array';
-    expect(() => validateEvalToolArgs(args, SIGNALS)).toThrow(/non-array "top_actions"/);
+    expect(() => validateEvalToolArgs(args, SIGNALS)).toThrow(/non-array "top_actions"/i);
   });
 
   it('rejects null input', () => {
