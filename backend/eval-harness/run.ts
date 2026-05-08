@@ -16,6 +16,8 @@ import { reconstructBuildTree } from '../src/modules/evaluations/helpers/reconst
 import { selectBuildContext } from '../src/modules/evaluations/helpers/select-build-context';
 import { SignalMentorAgent } from '../src/modules/signal-mentor/agents/signal-mentor.agent';
 import { GapSignalContext, SignalMentorInput } from '../src/modules/signal-mentor/types/signal-mentor.types';
+import { MentorAgent } from '../src/modules/mentor/agents/mentor.agent';
+import { MentorInput } from '../src/modules/mentor/types/mentor.types';
 import { LLM_ENV } from '../src/modules/llm/constants';
 import { Phase } from '../src/modules/phase-tagger/types/phase.types';
 import { loadFixtures, validateAgainstRubric } from './fixture-loader';
@@ -27,6 +29,7 @@ interface CliArgs {
   filter?: string;
   out?: string;
   withSignalMentor?: boolean;
+  withMentor?: boolean;
   phase?: FixturePhase; // when set, only run fixtures matching this phase
 }
 
@@ -36,6 +39,7 @@ function parseArgs(argv: string[]): CliArgs {
     if (arg.startsWith('--filter=')) out.filter = arg.slice('--filter='.length);
     else if (arg.startsWith('--out=')) out.out = arg.slice('--out='.length);
     else if (arg === '--with-signal-mentor') out.withSignalMentor = true;
+    else if (arg === '--with-mentor') out.withMentor = true;
     else if (arg.startsWith('--phase=')) {
       const v = arg.slice('--phase='.length);
       if (v !== 'plan' && v !== 'build') {
@@ -69,7 +73,10 @@ it, all matching fixtures run.
   --out                 Write a JSON report to this path (in addition to console output).
   --with-signal-mentor  Also exercise the per-signal mentor agent against
                         each fixture's gap signals; print coverage per fixture.
-                        Plan-phase fixtures only.
+                        Works for both plan and build fixtures.
+  --with-mentor         Also exercise the deep-dive mentor agent. Prints
+                        section count, word count, and cross-phase mention
+                        per fixture as a cheap shape check.
 
 Exit code: 0 if every (non-warnOnly) fixture passed, 1 otherwise.`);
 }
@@ -168,6 +175,7 @@ async function main(): Promise<void> {
     const buildAgent = app.get(BuildAgent);
     const rubricLoader = app.get(RubricLoaderService);
     const signalMentorAgent = args.withSignalMentor ? app.get(SignalMentorAgent) : null;
+    const mentorAgent = args.withMentor ? app.get(MentorAgent) : null;
     const config = app.get(ConfigService);
 
     let fixtures = loadFixtures(fixturesDir, args.filter);
@@ -215,11 +223,11 @@ async function main(): Promise<void> {
       modelUsed = out.audit.modelUsed;
       results.push(compareResult(fx, out, elapsed, out.audit.modelUsed));
 
-      if (signalMentorAgent && fx.phase === 'plan') {
+      if (signalMentorAgent) {
         const seniority = fx.seniority ?? 'senior';
         const rubric = await rubricLoader.load(
           fx.rubricVersion,
-          'plan',
+          fx.phase as Phase,
           fx.mode,
           seniority,
         );
@@ -244,6 +252,8 @@ async function main(): Promise<void> {
             feedbackText: out.feedbackText,
             score: out.score,
             seniority: seniority === 'senior' ? 'senior' : seniority,
+            phase: fx.phase as Phase,
+            buildContext: input.buildContext,
             sessionId: `harness-${fx.name}`,
             evaluationId: `harness-${fx.name}-eval`,
           };
@@ -259,11 +269,38 @@ async function main(): Promise<void> {
             expectedMisses.length === 0 ||
             expectedMissesAnnotated.length === expectedMisses.length;
           console.log(
-            `  signal-mentor (${fx.name}): ${annotated.length}/${ids.length} gap signals annotated · ` +
+            `  signal-mentor (${fx.name}, ${fx.phase}): ${annotated.length}/${ids.length} gap signals annotated · ` +
               `expected-miss coverage ${expectedMissesAnnotated.length}/${expectedMisses.length} ` +
               `${coverageOk ? '✓' : '✗'}`,
           );
         }
+      }
+
+      if (mentorAgent) {
+        const seniority = fx.seniority ?? 'senior';
+        const mInput: MentorInput = {
+          question: fx.question,
+          planMd: fx.planMd,
+          signalResults: out.signalResults,
+          feedbackText: out.feedbackText,
+          topActionableItems: out.topActionableItems,
+          score: out.score,
+          seniority,
+          phase: fx.phase as Phase,
+          buildContext: input.buildContext,
+          sessionId: `harness-${fx.name}`,
+          evaluationId: `harness-${fx.name}-eval`,
+        };
+        const mOut = await mentorAgent.generate(mInput);
+        const md = mOut.artifact.content;
+        // Cheap shape check: count `## Section` headers and total words.
+        const sectionCount = (md.match(/^##\s+Section\s+\d+/gm) ?? []).length;
+        const words = md.split(/\s+/).filter(Boolean).length;
+        const hasCrossPhase = md.toLowerCase().includes(fx.phase === 'plan' ? 'build' : 'plan');
+        console.log(
+          `  mentor (${fx.name}, ${fx.phase}): ${sectionCount} section(s) · ${words} words · ` +
+            `cross-phase mention ${hasCrossPhase ? '✓' : '✗'}`,
+        );
       }
     }
 

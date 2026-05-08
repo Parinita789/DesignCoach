@@ -40,6 +40,10 @@ npm run eval:build -- --out=./eval-out.json
 # Override provider for a single run
 LLM_PROVIDER=claude_cli   npm run eval:build
 OLLAMA_BASE_URL=http://localhost:11434 OLLAMA_MODEL=llama3.1 npm run eval:plan
+
+# Exercise the deep-dive mentor + per-signal mentor on each fixture
+# (Phase 5: both work for plan AND build fixtures now)
+npm run eval:build -- --with-mentor --with-signal-mentor
 ```
 
 Exit code: `0` if every (non-`warnOnly`) fixture passed, `1` otherwise.
