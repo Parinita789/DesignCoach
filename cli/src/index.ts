@@ -18,25 +18,49 @@ program
   .option('--cwd <path>', 'directory to watch', process.cwd())
   .option('--server <url>', 'backend base URL', 'http://localhost:3000')
   .option('--duration <minutes>', 'auto-finish after this many minutes', '60')
-  .action(async (token: string, opts: { cwd: string; server: string; duration: string }) => {
-    const durationMinutes = Number(opts.duration);
-    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
-      console.error(`mentor: --duration must be a positive number (got "${opts.duration}")`);
-      process.exit(1);
-    }
-    if (durationMinutes > 24 * 60) {
-      console.error(
-        `mentor: --duration must be at most 1440 minutes (24h); got ${durationMinutes}`,
-      );
-      process.exit(1);
-    }
-    await runWatch({
-      token,
-      cwd: opts.cwd,
-      server: opts.server,
-      durationMinutes,
-    });
-  });
+  .option('--no-ai-logs', 'opt out of capturing Claude Code conversation logs for this build')
+  .option(
+    '--build-started-at <iso>',
+    'ISO8601 from start-build response; used to filter pre-build Claude Code sessions',
+  )
+  .action(
+    async (
+      token: string,
+      opts: {
+        cwd: string;
+        server: string;
+        duration: string;
+        aiLogs: boolean;
+        buildStartedAt?: string;
+      },
+    ) => {
+      const durationMinutes = Number(opts.duration);
+      if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+        console.error(`mentor: --duration must be a positive number (got "${opts.duration}")`);
+        process.exit(1);
+      }
+      if (durationMinutes > 24 * 60) {
+        console.error(
+          `mentor: --duration must be at most 1440 minutes (24h); got ${durationMinutes}`,
+        );
+        process.exit(1);
+      }
+      if (opts.buildStartedAt && Number.isNaN(Date.parse(opts.buildStartedAt))) {
+        console.error(
+          `mentor: --build-started-at must be an ISO8601 timestamp (got "${opts.buildStartedAt}")`,
+        );
+        process.exit(1);
+      }
+      await runWatch({
+        token,
+        cwd: opts.cwd,
+        server: opts.server,
+        durationMinutes,
+        captureAiLogs: opts.aiLogs,
+        buildStartedAtIso: opts.buildStartedAt,
+      });
+    },
+  );
 
 program
   .command('finish')

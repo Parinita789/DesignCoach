@@ -6,8 +6,10 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { BuildEventsRepository } from '../repositories/build-events.repository';
+import { BuildAIInteractionsRepository } from '../repositories/build-ai-interactions.repository';
 import { BuildTokenService, MintedToken } from './build-token.service';
 import { IncomingBuildEvent } from '../types/build-event.types';
+import { BuildAIInteractionDto } from '../dto/build-ai-interaction.dto';
 
 @Injectable()
 export class BuildSessionsService {
@@ -17,6 +19,7 @@ export class BuildSessionsService {
     private readonly prisma: PrismaService,
     private readonly tokens: BuildTokenService,
     private readonly events: BuildEventsRepository,
+    private readonly aiInteractions: BuildAIInteractionsRepository,
   ) {}
 
   async startBuildPhase(sessionId: string): Promise<MintedToken> {
@@ -40,6 +43,34 @@ export class BuildSessionsService {
 
   insertEvents(sessionId: string, events: IncomingBuildEvent[]) {
     return this.events.insertBatch(sessionId, events);
+  }
+
+  insertAiInteractions(sessionId: string, interactions: BuildAIInteractionDto[]) {
+    return this.aiInteractions.insertBatch(sessionId, interactions);
+  }
+
+  async eventsSummary(sessionId: string) {
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      select: {
+        buildStartedAt: true,
+        buildEndedAt: true,
+        buildEventCount: true,
+      },
+    });
+    if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+    const [perFile, aiCounts] = await Promise.all([
+      this.events.summaryForSession(sessionId),
+      this.aiInteractions.countsForSession(sessionId),
+    ]);
+    return {
+      buildStartedAt: session.buildStartedAt,
+      buildEndedAt: session.buildEndedAt,
+      eventCount: session.buildEventCount,
+      perFile,
+      aiInteractionCount: aiCounts.total,
+      aiSessionsCount: aiCounts.distinctSessions,
+    };
   }
 
   // Idempotent: a second call after finish returns the same eventCount

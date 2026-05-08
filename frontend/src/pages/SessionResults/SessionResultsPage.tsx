@@ -16,6 +16,7 @@ import { mentorService } from '@/services/mentor.service';
 import { signalMentorService } from '@/services/signalMentor.service';
 import { MentorArtifactView } from '@/components/MentorArtifactView';
 import { MarkdownView } from '@/components/MarkdownView';
+import { BuildPhaseSection } from '@/components/BuildPhaseSection';
 
 type ResultKind = SignalResult['result'] | 'not_evaluated';
 
@@ -266,6 +267,8 @@ export function SessionResultsPage() {
           onShowLatest={() => setSelectedEvalId(null)}
         />
       )}
+
+      {session.status === 'completed' && <BuildPhaseSection session={session} />}
 
       <section>
         <button

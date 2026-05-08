@@ -21,6 +21,7 @@ describe('BuildTokenService', () => {
 
       expect(out.sessionId).toBe('sid-1');
       expect(out.expiresInMinutes).toBe(60);
+      expect(out.buildStartedAt).toBeInstanceOf(Date);
       // Token shape: <sessionId>.<hex>
       const [sid, secret] = out.token.split('.');
       expect(sid).toBe('sid-1');

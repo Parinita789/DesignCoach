@@ -32,4 +32,29 @@ export class BuildEventsRepository {
   countForSession(sessionId: string) {
     return this.prisma.buildEvent.count({ where: { sessionId } });
   }
+
+  // One row per file path with aggregate counts for the build-timeline
+  // widget on the results page. Drops content/diff payload — the
+  // widget shows counts only, not text.
+  async summaryForSession(sessionId: string) {
+    const grouped = await this.prisma.buildEvent.groupBy({
+      by: ['filePath'],
+      where: { sessionId },
+      _count: { _all: true },
+      _min: { occurredAt: true },
+      _max: { occurredAt: true },
+    });
+    return grouped
+      .map((g) => ({
+        filePath: g.filePath,
+        eventCount: g._count._all,
+        firstAt: g._min.occurredAt,
+        lastAt: g._max.occurredAt,
+      }))
+      .sort((a, b) => {
+        const da = a.firstAt?.getTime() ?? 0;
+        const db = b.firstAt?.getTime() ?? 0;
+        return da - db;
+      });
+  }
 }

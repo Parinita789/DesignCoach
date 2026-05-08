@@ -72,11 +72,12 @@ model Session {
 
   question Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
 
-  snapshots         Snapshot[]
-  phaseEvaluations  PhaseEvaluation[]
-  aiInteractions    AIInteraction[]
-  finalArtifacts    FinalArtifacts?
-  buildEvents       BuildEvent[]
+  snapshots           Snapshot[]
+  phaseEvaluations    PhaseEvaluation[]
+  aiInteractions      AIInteraction[]
+  finalArtifacts      FinalArtifacts?
+  buildEvents         BuildEvent[]
+  buildAiInteractions BuildAIInteraction[]
 
   @@index([questionId])
   @@map("sessions")
@@ -100,6 +101,33 @@ model BuildEvent {
 
   @@index([sessionId, occurredAt])
   @@map("build_events")
+}
+
+// One row per turn captured from a Claude Code conversation log
+// (~/.claude/projects/<encodedCwd>/*.jsonl) during the build phase.
+// Truncated at the CLI before shipping (text ≤ 4 KB, tool result ≤ 1 KB).
+// Unique constraint on (sessionId, externalSessionId, turnIndex) so
+// re-shipped turns from a wiped CLI cursor file silently dedupe via
+// createMany({ skipDuplicates: true }).
+model BuildAIInteraction {
+  id                  String   @id @default(uuid()) @db.Uuid
+  sessionId           String   @map("session_id") @db.Uuid
+  tool                String
+  externalSessionId   String   @map("external_session_id")
+  turnIndex           Int      @map("turn_index")
+  role                String
+  text                String?
+  toolName            String?  @map("tool_name")
+  toolInputSummary    String?  @map("tool_input_summary")
+  toolResultSummary   String?  @map("tool_result_summary")
+  occurredAt          DateTime @map("occurred_at")
+  receivedAt          DateTime @default(now()) @map("received_at")
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, externalSessionId, turnIndex], name: "uniq_session_turn")
+  @@index([sessionId, occurredAt])
+  @@map("build_ai_interactions")
 }
 
 model Snapshot {

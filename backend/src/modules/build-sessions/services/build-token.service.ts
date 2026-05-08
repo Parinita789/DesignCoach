@@ -12,6 +12,10 @@ export interface MintedToken {
   token: string;
   sessionId: string;
   expiresInMinutes: number;
+  // CLI uses this to filter Claude Code log files whose first turn
+  // predates the build phase — those are unrelated sessions on the
+  // same project from before the candidate clicked Start-build.
+  buildStartedAt: Date;
 }
 
 export interface VerifiedToken {
@@ -31,11 +35,12 @@ export class BuildTokenService {
   async mintForSession(sessionId: string): Promise<MintedToken> {
     const secret = randomBytes(SECRET_BYTES).toString('hex');
     const hash = await bcrypt.hash(secret, BCRYPT_ROUNDS);
+    const buildStartedAt = new Date();
     await this.prisma.session.update({
       where: { id: sessionId },
       data: {
         buildTokenHash: hash,
-        buildStartedAt: new Date(),
+        buildStartedAt,
         buildEndedAt: null,
       },
     });
@@ -44,6 +49,7 @@ export class BuildTokenService {
       token: `${sessionId}.${secret}`,
       sessionId,
       expiresInMinutes: TOKEN_TTL_MS / 60_000,
+      buildStartedAt,
     };
   }
 

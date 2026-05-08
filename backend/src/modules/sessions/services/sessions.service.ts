@@ -4,8 +4,12 @@ import { SessionsRepository } from '../repositories/sessions.repository';
 import { EndSessionDto } from '../dto/end-session.dto';
 import { EvaluationsService } from '../../evaluations/services/evaluations.service';
 
+// buildTokenHash is intentionally stripped at the repository — it
+// must never reach the API. The service surfaces the redacted shape.
+export type RedactedSession = Omit<Session, 'buildTokenHash'>;
+
 export interface EndSessionResult {
-  session: Session;
+  session: RedactedSession;
   evaluations: PhaseEvaluation[];
   evalError: string | null;
 }

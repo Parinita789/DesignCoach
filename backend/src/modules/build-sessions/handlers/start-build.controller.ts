@@ -1,4 +1,4 @@
-import { Controller, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { BuildSessionsService } from '../services/build-sessions.service';
 
@@ -15,5 +15,15 @@ export class StartBuildController {
   })
   startBuild(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.buildSessions.startBuildPhase(id);
+  }
+
+  @Get(':id/build-events')
+  @ApiOperation({
+    summary: 'Build-phase status + per-file event aggregate',
+    description:
+      'Returns the build phase timestamps + total event count + a per-file aggregate summary. Used by the results page to poll for "waiting / in progress / complete" status and render the build-timeline widget.',
+  })
+  buildEventsSummary(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.buildSessions.eventsSummary(id);
   }
 }

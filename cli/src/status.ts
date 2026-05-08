@@ -1,12 +1,15 @@
 import chalk from 'chalk';
 import { EventBuffer } from './buffer';
+import { AIBuffer } from './aiBuffer';
 import { configDir, readSession, readState } from './config';
 
 export async function runStatus(): Promise<void> {
   const session = readSession();
   const state = readState();
   const buffer = new EventBuffer();
+  const aiBuffer = new AIBuffer();
   const { total, unsent } = buffer.size();
+  const ai = aiBuffer.size();
 
   console.log(chalk.cyan('mentor — local status'));
   console.log(chalk.gray(`  config dir:    ${configDir()}`));
@@ -15,8 +18,12 @@ export async function runStatus(): Promise<void> {
   } else {
     console.log(`  server:        ${session.server}`);
     console.log(`  token:         ${redact(session.token)}`);
+    if (session.buildStartedAt) {
+      console.log(`  build start:   ${session.buildStartedAt}`);
+    }
   }
   console.log(`  buffer:        ${total} events (${unsent} unsent)`);
+  console.log(`  ai buffer:     ${ai.total} turns (${ai.unsent} unsent)`);
   if (state.startedAt) console.log(`  started:       ${state.startedAt}`);
   if (state.lastFlushAt) {
     const ok = state.lastFlushOk ? chalk.green('ok') : chalk.red('failed');

@@ -4,8 +4,16 @@ import chokidar from 'chokidar';
 import chalk from 'chalk';
 import ignore, { Ignore } from 'ignore';
 import { EventBuffer, NewEvent } from './buffer';
+import { AIBuffer } from './aiBuffer';
+import { ClaudeCodeLogReader } from './aiLogs';
 import { computeChange, isNoopOutcome, PrevState } from './diff';
-import { drainBuffer, MentorApiClient, sendWithBackoff } from './api';
+import {
+  drainAiBuffer,
+  drainBuffer,
+  MentorApiClient,
+  sendAiWithBackoff,
+  sendWithBackoff,
+} from './api';
 import { readState, writeSession, writeState } from './config';
 
 export interface WatchOptions {
@@ -13,6 +21,10 @@ export interface WatchOptions {
   cwd: string;
   server: string;
   durationMinutes: number;
+  captureAiLogs: boolean;
+  // ISO8601 from the start-build response when available. Used to filter
+  // out Claude Code sessions that predate the build phase.
+  buildStartedAtIso?: string;
 }
 
 const FLUSH_INTERVAL_MS = 30_000;
@@ -38,13 +50,25 @@ export async function runWatch(opts: WatchOptions): Promise<void> {
     throw new Error(`watch: cwd does not exist or is not a directory: ${cwd}`);
   }
 
-  writeSession({ token: opts.token, server: opts.server });
+  writeSession({
+    token: opts.token,
+    server: opts.server,
+    buildStartedAt: opts.buildStartedAtIso,
+  });
   writeState({ ...readState(), startedAt: new Date().toISOString() });
 
   const buffer = new EventBuffer();
+  const aiBuffer = new AIBuffer();
   const api = new MentorApiClient({ token: opts.token, server: opts.server });
   const ig = loadIgnore(cwd);
   const prev = new Map<string, PrevState>();
+
+  const buildStartedAt = opts.buildStartedAtIso
+    ? new Date(opts.buildStartedAtIso)
+    : new Date();
+  const aiReader = opts.captureAiLogs
+    ? new ClaudeCodeLogReader({ cwd, buildStartedAt })
+    : null;
 
   const watcher = chokidar.watch(cwd, {
     persistent: true,
@@ -100,26 +124,61 @@ export async function runWatch(opts: WatchOptions): Promise<void> {
   );
 
   console.log(chalk.cyan(`mentor: watching ${cwd}`));
-  console.log(chalk.gray(`mentor: server ${opts.server} · duration ${opts.durationMinutes}m`));
+  console.log(
+    chalk.gray(
+      `mentor: server ${opts.server} · duration ${opts.durationMinutes}m · ai-logs ${
+        opts.captureAiLogs ? 'on' : 'off'
+      }`,
+    ),
+  );
 
   let shutdown = false;
+
+  // Scan Claude Code's project log dir, append any new turns to the AI
+  // buffer. Returns turn count newly buffered (not flushed).
+  const scanAi = async (): Promise<number> => {
+    if (!aiReader) return 0;
+    try {
+      const turns = await aiReader.scan();
+      for (const t of turns) aiBuffer.append(t);
+      return turns.length;
+    } catch (err) {
+      console.warn(
+        chalk.yellow(`mentor: ai-log scan failed: ${(err as Error).message}`),
+      );
+      return 0;
+    }
+  };
+
   const flush = async (): Promise<void> => {
     if (shutdown) return;
+    await scanAi();
     const events = buffer.unsent(FLUSH_BATCH_SIZE);
-    if (events.length === 0) return;
-    const out = await sendWithBackoff(api, events);
-    if (out.ok) {
-      buffer.markSent(events.map((e) => e.id));
-      writeState({ ...readState(), lastFlushAt: new Date().toISOString(), lastFlushOk: true });
-      console.log(chalk.gray(`mentor: flushed ${out.accepted} events`));
-    } else {
-      writeState({
-        ...readState(),
-        lastFlushAt: new Date().toISOString(),
-        lastFlushOk: false,
-        lastFlushError: out.error,
-      });
-      console.warn(chalk.yellow(`mentor: flush failed (${out.error}); will retry`));
+    if (events.length > 0) {
+      const out = await sendWithBackoff(api, events);
+      if (out.ok) {
+        buffer.markSent(events.map((e) => e.id));
+        writeState({ ...readState(), lastFlushAt: new Date().toISOString(), lastFlushOk: true });
+        console.log(chalk.gray(`mentor: flushed ${out.accepted} events`));
+      } else {
+        writeState({
+          ...readState(),
+          lastFlushAt: new Date().toISOString(),
+          lastFlushOk: false,
+          lastFlushError: out.error,
+        });
+        console.warn(chalk.yellow(`mentor: flush failed (${out.error}); will retry`));
+      }
+    }
+    const aiTurns = aiBuffer.unsent(FLUSH_BATCH_SIZE);
+    if (aiTurns.length > 0) {
+      const out = await sendAiWithBackoff(api, aiTurns);
+      if (out.ok) {
+        aiBuffer.markSent(aiTurns.map((t) => t.id));
+        console.log(chalk.gray(`mentor: flushed ${out.accepted} AI turns`));
+      } else {
+        console.warn(chalk.yellow(`mentor: ai flush failed (${out.error}); will retry`));
+      }
     }
   };
 
@@ -131,7 +190,15 @@ export async function runWatch(opts: WatchOptions): Promise<void> {
   const elapsedTimer = setInterval(() => {
     const min = Math.round((Date.now() - startedAt) / 60_000);
     const { total, unsent } = buffer.size();
-    console.log(chalk.gray(`mentor: ${min}m elapsed · ${total} events captured · ${unsent} unsent`));
+    const ai = aiBuffer.size();
+    const aiPart = aiReader
+      ? ` · ${ai.total} AI turns (${ai.unsent} unsent)`
+      : '';
+    console.log(
+      chalk.gray(
+        `mentor: ${min}m elapsed · ${total} events captured · ${unsent} unsent${aiPart}`,
+      ),
+    );
   }, ELAPSED_TICK_MS);
 
   const finalize = async (reason: string): Promise<void> => {
@@ -141,6 +208,10 @@ export async function runWatch(opts: WatchOptions): Promise<void> {
     clearInterval(elapsedTimer);
     console.log(chalk.cyan(`mentor: shutting down (${reason})`));
     await watcher.close();
+
+    // One last AI scan so any turns that landed between the last
+    // periodic scan and shutdown also get drained.
+    await scanAi();
 
     // Final flush — chunked so a long build's tail doesn't ship as
     // one huge body (would hit timeouts / size caps).
@@ -154,6 +225,16 @@ export async function runWatch(opts: WatchOptions): Promise<void> {
       );
     }
 
+    const aiDrain = await drainAiBuffer(api, aiBuffer, FLUSH_BATCH_SIZE);
+    if (aiDrain.error) {
+      console.warn(
+        chalk.yellow(
+          `mentor: final ai flush partial — ${aiDrain.flushed} sent, ` +
+            `${aiDrain.remaining} unsent (${aiDrain.error})`,
+        ),
+      );
+    }
+
     let finishOk = false;
     try {
       await api.finishBuild();
@@ -163,13 +244,22 @@ export async function runWatch(opts: WatchOptions): Promise<void> {
     }
 
     const { total, unsent } = buffer.size();
+    const ai = aiBuffer.size();
     const sec = Math.round((Date.now() - startedAt) / 1000);
     console.log(
       chalk.cyan(
         `mentor: done · ${total} events · ${total - unsent} flushed · ${unsent} unsent · ${sec}s`,
       ),
     );
-    process.exit(finishOk && unsent === 0 ? 0 : 1);
+    if (aiReader) {
+      console.log(
+        chalk.cyan(
+          `mentor: ai · ${ai.total} turns · ${ai.total - ai.unsent} flushed · ${ai.unsent} unsent`,
+        ),
+      );
+    }
+    const cleanExit = finishOk && unsent === 0 && ai.unsent === 0;
+    process.exit(cleanExit ? 0 : 1);
   };
 
   process.once('SIGINT', () => void finalize('SIGINT'));

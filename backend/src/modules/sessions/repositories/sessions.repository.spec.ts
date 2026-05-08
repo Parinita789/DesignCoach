@@ -84,4 +84,51 @@ describe('SessionsRepository', () => {
       expect(session.update.mock.calls[0][0].data.status).toBe(SessionStatus.abandoned);
     });
   });
+
+  describe('buildTokenHash redaction (security)', () => {
+    const dbRow = {
+      id: 'sid-1',
+      questionId: 'qid-1',
+      buildTokenHash: '$2b$10$secret-hash-must-not-leak',
+      buildStartedAt: new Date('2026-05-07T00:00:00Z'),
+      buildEndedAt: null,
+      buildEventCount: 3,
+      status: 'completed',
+    };
+
+    it('strips buildTokenHash from findById', async () => {
+      session.findUnique.mockResolvedValue(dbRow);
+      const out = await repo.findById('sid-1');
+      expect(out).not.toBeNull();
+      expect((out as Record<string, unknown>).buildTokenHash).toBeUndefined();
+      expect(out!.buildEventCount).toBe(3);
+    });
+
+    it('strips buildTokenHash from findByIdWithQuestion', async () => {
+      session.findUnique.mockResolvedValue({ ...dbRow, question: { prompt: 'X' } });
+      const out = await repo.findByIdWithQuestion('sid-1');
+      expect((out as Record<string, unknown>).buildTokenHash).toBeUndefined();
+      expect(out!.buildStartedAt).toEqual(new Date('2026-05-07T00:00:00Z'));
+    });
+
+    it('strips buildTokenHash from each row of findAll', async () => {
+      session.findMany.mockResolvedValue([dbRow, { ...dbRow, id: 'sid-2' }]);
+      const rows = await repo.findAll();
+      for (const r of rows) {
+        expect((r as Record<string, unknown>).buildTokenHash).toBeUndefined();
+      }
+      expect(rows.length).toBe(2);
+    });
+
+    it('strips buildTokenHash from markEnded result', async () => {
+      session.update.mockResolvedValue(dbRow);
+      const out = await repo.markEnded('sid-1', SessionStatus.completed);
+      expect((out as Record<string, unknown>).buildTokenHash).toBeUndefined();
+    });
+
+    it('returns null unchanged from findById when row is missing', async () => {
+      session.findUnique.mockResolvedValue(null);
+      expect(await repo.findById('missing')).toBeNull();
+    });
+  });
 });

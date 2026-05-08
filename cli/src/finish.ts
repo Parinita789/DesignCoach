@@ -1,6 +1,12 @@
 import chalk from 'chalk';
 import { EventBuffer } from './buffer';
-import { describeError, drainBuffer, MentorApiClient } from './api';
+import { AIBuffer } from './aiBuffer';
+import {
+  describeError,
+  drainAiBuffer,
+  drainBuffer,
+  MentorApiClient,
+} from './api';
 import { readSession } from './config';
 
 const FLUSH_BATCH_SIZE = 100;
@@ -20,6 +26,7 @@ export async function runFinish(opts: FinishOptions): Promise<number> {
 
   const server = opts.server ?? session.server;
   const buffer = new EventBuffer();
+  const aiBuffer = new AIBuffer();
   const api = new MentorApiClient({ token: session.token, server });
 
   const drain = await drainBuffer(api, buffer, FLUSH_BATCH_SIZE);
@@ -27,6 +34,15 @@ export async function runFinish(opts: FinishOptions): Promise<number> {
     console.warn(
       chalk.yellow(
         `mentor: flush failed — ${drain.flushed} sent, ${drain.remaining} unsent (${drain.error})`,
+      ),
+    );
+  }
+
+  const aiDrain = await drainAiBuffer(api, aiBuffer, FLUSH_BATCH_SIZE);
+  if (aiDrain.error) {
+    console.warn(
+      chalk.yellow(
+        `mentor: ai flush failed — ${aiDrain.flushed} sent, ${aiDrain.remaining} unsent (${aiDrain.error})`,
       ),
     );
   }
@@ -40,10 +56,18 @@ export async function runFinish(opts: FinishOptions): Promise<number> {
   }
 
   const { total, unsent } = buffer.size();
+  const ai = aiBuffer.size();
   console.log(
     chalk.cyan(
       `mentor: done · ${total} events · ${drain.flushed} flushed in this call · ${unsent} unsent`,
     ),
   );
-  return finishOk && unsent === 0 ? 0 : 1;
+  if (ai.total > 0 || aiDrain.flushed > 0) {
+    console.log(
+      chalk.cyan(
+        `mentor: ai · ${ai.total} turns · ${aiDrain.flushed} flushed in this call · ${ai.unsent} unsent`,
+      ),
+    );
+  }
+  return finishOk && unsent === 0 && ai.unsent === 0 ? 0 : 1;
 }

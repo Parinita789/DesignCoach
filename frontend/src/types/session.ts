@@ -12,6 +12,9 @@ export interface Session {
   seniority?: Seniority | null;
   overallScore: number | null;
   overallFeedback: string | null;
+  buildStartedAt: string | null;
+  buildEndedAt: string | null;
+  buildEventCount: number;
 }
 
 export interface SessionWithQuestion extends Session {
