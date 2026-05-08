@@ -92,6 +92,7 @@ export interface EvaluationAuditPayload {
   cacheReadTokens: number;
   cacheCreationTokens: number;
   latencyMs?: number;
+  llmScore?: number;
 }
 
 export interface SynthesisResult {

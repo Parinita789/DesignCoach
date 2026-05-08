@@ -154,6 +154,7 @@ export class BuildAgent extends BasePhaseAgent {
         cacheReadTokens: llm.cacheReadTokens,
         cacheCreationTokens: llm.cacheCreationTokens,
         latencyMs,
+        llmScore: parsed.score,
       },
     };
   }

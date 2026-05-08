@@ -40,6 +40,7 @@ describe('EvaluationsRepository', () => {
       cacheReadTokens: 800,
       cacheCreationTokens: 0,
       latencyMs: 4321,
+      llmScore: 4.0,
     },
   };
 
@@ -81,6 +82,7 @@ describe('EvaluationsRepository', () => {
           cacheReadTokens: audit.cacheReadTokens,
           cacheCreationTokens: audit.cacheCreationTokens,
           latencyMs: audit.latencyMs,
+          llmScore: audit.llmScore,
         },
       });
       expect(result).toEqual({ id: 'aid-1' });

@@ -34,6 +34,7 @@ export class EvaluationsRepository {
         cacheReadTokens: audit.cacheReadTokens,
         cacheCreationTokens: audit.cacheCreationTokens,
         latencyMs: audit.latencyMs ?? null,
+        llmScore: audit.llmScore ?? null,
       },
     });
   }

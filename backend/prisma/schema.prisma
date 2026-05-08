@@ -188,6 +188,13 @@ model EvaluationAudit {
   cacheReadTokens     Int      @default(0) @map("cache_read_tokens")
   cacheCreationTokens Int      @default(0) @map("cache_creation_tokens")
   latencyMs           Int?     @map("latency_ms")
+  // The score the LLM itself proposed in its tool/JSON output, before the
+  // deterministic re-computation. PhaseEvaluation.score is the
+  // deterministic value we trust; storing the raw LLM-claimed score here
+  // makes prompt drift, calibration error, and rubric weighting bugs
+  // queryable as `abs(eval.score - audit.llm_score)`. Nullable for
+  // pre-migration rows.
+  llmScore            Decimal? @map("llm_score") @db.Decimal(3, 2)
   createdAt           DateTime @default(now()) @map("created_at")
 
   phaseEvaluation PhaseEvaluation @relation(fields: [phaseEvaluationId], references: [id], onDelete: Cascade)
