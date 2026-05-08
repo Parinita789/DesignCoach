@@ -42,9 +42,11 @@ export class OrchestratorService {
     options?: { model?: string },
   ): Promise<PhaseEvaluation[]> {
     const session = await this.sessionsService.getWithQuestion(sessionId);
-    const allSnapshots = await this.snapshotsService.list(sessionId);
-    const latestSnapshot = await this.snapshotsService.latest(sessionId);
-    const hints = await this.aiInteractionsRepo.findBySession(sessionId);
+    const [allSnapshots, hints] = await Promise.all([
+      this.snapshotsService.list(sessionId),
+      this.aiInteractionsRepo.findBySession(sessionId),
+    ]);
+    const latestSnapshot = allSnapshots[0];
 
     const rubricVersion =
       session.question.rubricVersion ??

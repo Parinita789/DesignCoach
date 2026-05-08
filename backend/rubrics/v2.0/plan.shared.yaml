@@ -219,29 +219,29 @@ signals:
       plan.md are critical violations.
     evidence_hint: "Quote the offending commit SHA(s) and filenames."
 
-  - id: ai_authored_plan
-    polarity: bad
-    weight: high
-    requires_evidence: [hints, snapshots]
-    description: |
-      plan.md appears AI-generated and adopted with minimal candidate
-      editing, rather than candidate-authored and AI-refined.
-    judge_notes: |
-      EVIDENCE PRECONDITION: this signal requires hint-chat history AND
-      snapshot timeline. If only plan.md is provided (no hint exchanges,
-      no snapshot ordering), return cannot_evaluate with evidence
-      "no timing or AI-interaction signal available — cannot
-      responsibly judge AI authorship from plan.md alone".
+  # - id: ai_authored_plan
+  #   polarity: bad
+  #   weight: high
+  #   requires_evidence: [hints, snapshots]
+  #   description: |
+  #     plan.md appears AI-generated and adopted with minimal candidate
+  #     editing, rather than candidate-authored and AI-refined.
+  #   judge_notes: |
+  #     EVIDENCE PRECONDITION: this signal requires hint-chat history AND
+  #     snapshot timeline. If only plan.md is provided (no hint exchanges,
+  #     no snapshot ordering), return cannot_evaluate with evidence
+  #     "no timing or AI-interaction signal available — cannot
+  #     responsibly judge AI authorship from plan.md alone".
 
-      When evidence IS available, look for converging signatures:
-      (a) hint history shows a single prompt eliciting a full
-      architectural plan that closely matches plan.md;
-      (b) snapshot timeline shows plan.md materializing in a single
-      large jump shortly after a hint exchange;
-      (c) plan.md is comprehensive-but-generic, abstract tradeoffs
-      untied to specific constraints.
-      Two or more signatures fires this signal.
-    evidence_hint: "List the converging signatures with quotes/timestamps."
+  #     When evidence IS available, look for converging signatures:
+  #     (a) hint history shows a single prompt eliciting a full
+  #     architectural plan that closely matches plan.md;
+  #     (b) snapshot timeline shows plan.md materializing in a single
+  #     large jump shortly after a hint exchange;
+  #     (c) plan.md is comprehensive-but-generic, abstract tradeoffs
+  #     untied to specific constraints.
+  #     Two or more signatures fires this signal.
+  #   evidence_hint: "List the converging signatures with quotes/timestamps."
 
   - id: data_model_only_in_code
     polarity: bad
@@ -319,20 +319,20 @@ signals:
       contracts.
     evidence_hint: "Quote the modules list and note absent interface sketches."
 
-ai_usage_for_this_phase:
-  description: |
-    Plan must be candidate-authored first, then refined with AI — not
-    AI-generated and adopted.
-  good_modes:
-    - "Mode 1 — Autocomplete: candidate has decisions, AI helps express them cleanly"
-    - "Mode 2 — Sparring partner: candidate has draft, AI challenges or surfaces blind spots"
-  bad_modes:
-    - "Mode 3 — Outsourcing: AI generates plan from prompt, candidate adopts with minimal edits"
-  additional_note: |
-    When the candidate accepts AI-generated architectural shape, seams,
-    data model, or component boundaries without first committing to
-    their own version, that's Mode 3 applied to architecture. Treat
-    with same severity as ai_authored_plan.
+# ai_usage_for_this_phase:
+#   description: |
+#     Plan must be candidate-authored first, then refined with AI — not
+#     AI-generated and adopted.
+#   good_modes:
+#     - "Mode 1 — Autocomplete: candidate has decisions, AI helps express them cleanly"
+#     - "Mode 2 — Sparring partner: candidate has draft, AI challenges or surfaces blind spots"
+#   bad_modes:
+#     - "Mode 3 — Outsourcing: AI generates plan from prompt, candidate adopts with minimal edits"
+#   additional_note: |
+#     When the candidate accepts AI-generated architectural shape, seams,
+#     data model, or component boundaries without first committing to
+#     their own version, that's Mode 3 applied to architecture. Treat
+#     with same severity as ai_authored_plan.
 
 artifacts_to_inspect:
   - "plan.md (existence, location, contents, commit timestamp, section completeness)"
