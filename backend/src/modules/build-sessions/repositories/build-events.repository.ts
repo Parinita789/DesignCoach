@@ -33,6 +33,22 @@ export class BuildEventsRepository {
     return this.prisma.buildEvent.count({ where: { sessionId } });
   }
 
+  // Returns the full event log for orchestrator-side tree reconstruction.
+  // Ordered by occurredAt so apply-in-order is correct without a re-sort.
+  findAllForSession(sessionId: string) {
+    return this.prisma.buildEvent.findMany({
+      where: { sessionId },
+      orderBy: { occurredAt: 'asc' },
+      select: {
+        filePath: true,
+        action: true,
+        content: true,
+        contentDiff: true,
+        occurredAt: true,
+      },
+    });
+  }
+
   // One row per file path with aggregate counts for the build-timeline
   // widget on the results page. Drops content/diff payload — the
   // widget shows counts only, not text.

@@ -17,6 +17,7 @@ import { SnapshotsModule } from '../snapshots/snapshots.module';
 import { HintsModule } from '../hints/hints.module';
 import { MentorModule } from '../mentor/mentor.module';
 import { SignalMentorModule } from '../signal-mentor/signal-mentor.module';
+import { BuildSessionsModule } from '../build-sessions/build-sessions.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { SignalMentorModule } from '../signal-mentor/signal-mentor.module';
     forwardRef(() => SessionsModule),
     forwardRef(() => MentorModule),
     forwardRef(() => SignalMentorModule),
+    forwardRef(() => BuildSessionsModule),
   ],
   controllers: [EvaluationsController, RubricsController],
   providers: [

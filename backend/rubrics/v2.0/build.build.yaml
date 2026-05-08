@@ -1,0 +1,56 @@
+schema_version: 2
+rubric_version: v2.0
+phase: build
+mode: build
+phase_name: "Build (Build mode)"
+extends: build.shared.yaml
+
+goal: |
+  Implement the plan. Tests are expected; AI is used as a collaborator,
+  not an architect; the captured timeline shows incremental progress
+  rather than a single-shot drop. The plan was the contract — this
+  phase scores how well the candidate executed against it.
+
+time_bounds:
+  target_min_minutes: 25
+  target_max_minutes: 45
+  flag_under_minutes: 10
+  flag_over_minutes: 60
+  note: |
+    Build mode targets a 60-minute total session. The build phase
+    typically gets 25-45 minutes after a 12-20 minute plan phase.
+
+override_signals:
+  test_appropriateness:
+    weight: high
+  no_tests:
+    weight: high
+
+scoring:
+  anchors:
+    5: |
+      Pass bar fully met. Code mirrors the plan's component_boundaries.
+      Tests exist and have substantive assertions. The timeline shows
+      sustained incremental progress. AI was used collaboratively. No
+      bad signals fire.
+    4: |
+      Pass bar met. Most good signals hit including all high-weight
+      ones. Minor structural gaps or one or two undertested components.
+      No high-severity bad signals fire.
+    3: |
+      Pass bar met but one or more high-weight good signals are missed
+      or partial (no tests for a major component, code drifts from plan
+      without acknowledgment). Some medium bad signals may fire.
+    2: |
+      Pass bar partially missed (e.g., trivially few captured events
+      relative to the plan's scope), OR multiple high-weight good
+      signals missed, OR ai_dictation fires.
+    1: |
+      No captured events, OR captured events show no working system
+      against the plan, OR commit_dump fires alongside ai_dictation.
+  calibration_note: |
+    Build mode's central question is: did the candidate execute the
+    plan? Implementation breadth, test coverage of the plan's
+    components, and incremental progress are the high-weight signals.
+    Articulation alone (without working code) doesn't earn marks here —
+    that was the plan phase's job.

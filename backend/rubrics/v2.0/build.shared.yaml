@@ -1,0 +1,297 @@
+schema_version: 2
+phase: build
+
+weight_values:
+  high: 3
+  medium: 2
+  low: 1
+
+pass_bar:
+  description: |
+    The build session captured at least one file event after build_started_at,
+    and either ran to natural completion (mentor finish) or hit the duration
+    timer. A build session that ended with zero captured events cannot be
+    judged and is scored 1.
+  required_artifact: "build_events table populated for the session"
+  temporal_check: "First event occurredAt must fall after buildStartedAt"
+  required_sections: []
+
+signals:
+  # ---------- Shared GOOD signals ----------
+
+  - id: code_matches_plan
+    polarity: good
+    weight: high
+    description: |
+      The captured file tree maps to the components named in plan.md.
+      Major modules called out in the component_boundaries section are
+      visible in the final tree as files or directories. Naming conventions
+      track the plan (a "RetryClient" in the plan shows up as
+      retry-client.ts, RetryClient.kt, or similar).
+    judge_notes: |
+      Cross-reference plan.md's component_boundaries section against the
+      final-tree path list. Allow 1:1 file-to-component or 1:N
+      directory-to-component mapping. Renames are fine if the role is
+      preserved. Missing more than one named component fires this signal
+      as miss.
+    evidence_hint: "Quote the component name from plan.md and the matching path (or note absence)."
+
+  - id: incremental_build
+    polarity: good
+    weight: medium
+    paired_with: commit_dump
+    description: |
+      Files arrive over time, not in a single batch. The event timeline
+      shows distinct work bursts separated by gaps where the candidate
+      was thinking, testing, or refining. Successive diffs grow the
+      system rather than dropping it in finished form.
+    judge_notes: |
+      Look at the per-file aggregates: spread of first-event timestamps,
+      gaps between events on the same file, total span vs total event
+      count. A 30-minute build with 60 events spread evenly passes; the
+      same 60 events landing in a 90-second window fails.
+    evidence_hint: "Quote the timestamp range and event count from the timeline."
+
+  - id: structure_soundness
+    polarity: good
+    weight: medium
+    description: |
+      The directory layout reflects the dependency direction stated in
+      plan.md's component_boundaries. Modules that should be independent
+      live in separate folders or files. Cross-cutting concerns
+      (config, logging) are not duplicated across leaf modules.
+    judge_notes: |
+      "handlers/ -> services/ -> repos/" in the plan should produce
+      visibly separated directories or filename prefixes. A flat dump
+      where everything sits at the project root despite a layered plan
+      fires this as miss.
+    evidence_hint: "Quote a couple of paths and explain how they reflect (or don't) the plan's layering."
+
+  - id: test_appropriateness
+    polarity: good
+    weight: medium
+    paired_with: no_tests
+    description: |
+      Test files exist for the components plan.md said would need tests.
+      Test bodies are non-trivial — multiple assertions, varied inputs,
+      or edge cases — not single-line stubs.
+    judge_notes: |
+      Identify test files by path conventions (test_*.py, *.test.ts,
+      __tests__/*, *_spec.rb). Read the captured contents or diffs and
+      check for assertions. A test file that only imports the module
+      and calls a function with no assertions fires this as miss or
+      partial.
+    evidence_hint: "Quote a test path and a snippet of its assertions, or note absence."
+
+  - id: design_evolution_coherence
+    polarity: good
+    weight: low
+    paired_with: silent_drift
+    description: |
+      When the candidate deviates from plan.md mid-build, the deviation
+      surfaces somewhere visible — a plan.md edit captured as an event,
+      a code comment, or an AI conversation message acknowledging the
+      change. Silent drift fires the paired bad signal instead.
+    judge_notes: |
+      Look for plan.md modifications captured during the build, or AI
+      turns where the candidate explains why they're departing from the
+      plan. Absence of any acknowledgment when the code clearly differs
+      from the plan fails this and fires silent_drift.
+    evidence_hint: "Quote the deviation and the acknowledgment, or quote the deviation alone if no acknowledgment exists."
+
+  - id: ai_used_as_collaborator
+    polarity: good
+    weight: medium
+    paired_with: ai_dictation
+    description: |
+      The captured AI conversation turns show the candidate steering the
+      work. Prompts are scoped to specific tasks. The candidate asks
+      targeted follow-ups, rejects suggestions when wrong, decomposes
+      large requests into smaller ones, and demonstrates understanding
+      of what the AI produced.
+    judge_notes: |
+      Cues that pass: multi-turn refinement on the same task, explicit
+      pushback ("no, that loses the retry semantics"), targeted
+      questions about specific lines, the candidate writing some code
+      themselves between AI turns. Cues that fail: single mega-prompts
+      followed by adoption of whatever came back, no follow-ups.
+    evidence_hint: "Quote 1-2 turns showing the candidate steering the work."
+
+  # ---------- Shared BAD signals ----------
+
+  - id: silent_drift
+    polarity: bad
+    weight: medium
+    paired_with: design_evolution_coherence
+    description: |
+      Captured code diverges materially from plan.md without any
+      acknowledgment in code, comments, plan.md edits, or AI turns. The
+      candidate departed from the plan and never said so.
+    judge_notes: |
+      Material divergence means a different data model, swapped
+      components, or omitted features the plan declared in scope. A
+      cosmetic difference (renamed function, slightly different file
+      layout) does not fire this. The polarity is opposite to
+      design_evolution_coherence; if drift is acknowledged, that signal
+      hits and this misses.
+    evidence_hint: "Quote the plan claim and the diverging code, plus a note that no acknowledgment was found."
+
+  - id: dead_files
+    polarity: bad
+    weight: low
+    description: |
+      Files were created during the session but never modified again
+      after their first event and are not imported or referenced
+      elsewhere in the final tree. Throwaway scaffolding the candidate
+      forgot to remove.
+    judge_notes: |
+      Per-file event count of 1 plus no inbound references in any
+      other captured file fires this. Test files that legitimately ran
+      once and produced output do not count as dead.
+    evidence_hint: "Quote 1-2 dead-file paths and note that no other file references them."
+
+  - id: no_tests
+    polarity: bad
+    weight: medium
+    paired_with: test_appropriateness
+    description: |
+      No test files were captured during the build, despite plan.md
+      saying tests would exist or the variant rubric demanding them.
+    judge_notes: |
+      Apply the path-convention identification above. Zero matching
+      paths in the final tree fires this. If the plan explicitly said
+      "no tests this session", set this to cannot_evaluate with that
+      quote as evidence.
+    evidence_hint: "Quote the plan's testing claim and note absence in the tree."
+
+  - id: commit_dump
+    polarity: bad
+    weight: medium
+    paired_with: incremental_build
+    description: |
+      All file events arrive in one tight burst, typically near the
+      start or the end of the session. The capture timeline shows no
+      meaningful incremental progress — the candidate either pasted a
+      finished tree in or developed offline and saved everything at
+      once.
+    judge_notes: |
+      Heuristic: 80%+ of events land within a 5-minute window in a
+      session of 30+ minutes. Or: total event count is high but the
+      median inter-event delay across files is sub-second. Either
+      pattern fires this.
+    evidence_hint: "Quote the burst window's start and end and the percentage of events inside it."
+
+  - id: ai_dictation
+    polarity: bad
+    weight: high
+    paired_with: ai_used_as_collaborator
+    description: |
+      The AI conversation turns show the candidate accepting whatever
+      the AI produces verbatim. No challenge, no follow-up questions
+      probing what was produced, no rejection of obviously wrong
+      output. The candidate is dictating to the AI rather than
+      collaborating with it.
+    judge_notes: |
+      Strong fire: long single-turn prompts asking the AI to produce
+      whole subsystems, immediately followed by file events that match
+      the AI's output and no further AI turns on that subsystem. This
+      is the build-phase analog of ai_authored_plan.
+    evidence_hint: "Quote 1-2 turns showing dictation and the matching file events."
+
+ai_usage_for_this_phase:
+  description: |
+    Build-phase AI usage should be collaborative — the candidate
+    steers, the AI accelerates. Code-generation for small,
+    well-specified tasks is fine; AI-as-architect is not.
+  good_modes:
+    - "Mode 1 - Autocomplete: candidate has the implementation in mind, AI accelerates the typing"
+    - "Mode 2 - Sparring partner: candidate has a draft, AI critiques or surfaces edge cases"
+  bad_modes:
+    - "Mode 3 - Outsourcing: candidate accepts AI-generated subsystems verbatim with no challenge or follow-up"
+  additional_note: |
+    Mode 3 in the build phase is the build-time analog of ai_authored_plan
+    in the plan phase. Treat with similar severity.
+
+artifacts_to_inspect:
+  - "build_events table for the session (file path, action, content, contentDiff, occurredAt)"
+  - "build_ai_interactions for the session (Claude Code conversation turns, role, text, tool summaries)"
+  - "Reconstructed final-state tree (path, size, sha1)"
+  - "plan.md from the latest snapshot, for cross-reference"
+
+judge_calibration:
+  - "Apply 'defensible, not optimal' to all judgment-based criteria. The candidate had limited time and partial information."
+  - "A simple, well-fitted implementation that matches the plan is good. Don't penalize a small system for not being a big system."
+  - "Process criteria (was X captured? did N events fire?) are mechanical checks. Quality criteria require domain reasoning under the framing above."
+  - "If a signal cannot be evaluated from the captured artifacts (no tests captured AND no claim either way in plan.md), prefer cannot_evaluate over guessing miss."
+
+scoring:
+  scale_min: 1
+  scale_max: 5
+  default_score: null
+  computation: |
+    For each good signal: assign 0 (miss / cannot_evaluate), 0.5
+    (partial), or 1.0 (hit). Multiply by weight_values[signal.weight].
+    Sum across all good signals = good_score.
+
+    max_score = sum of weight_values for every good signal that is NOT
+    cannot_evaluate. (Skipped signals are excluded from BOTH numerator
+    and denominator so they don't drag the score down.)
+
+    For each bad signal:
+      - HIT      -> subtract weight_values[bad.weight]
+      - PARTIAL  -> subtract weight_values[bad.weight] * 0.5
+      - MISS / cannot_evaluate -> no deduction
+      If `paired_with` references a good signal: that pair measures
+      the same concept from opposite sides. Set the paired good
+      signal to MISS only for reporting; the deduction stands alone.
+
+    ratio = max(0, good_score - bad_deductions) / max_score
+
+    Apply the threshold table:
+      ratio >= 0.85 AND no high-weight good missed -> 5
+      ratio >= 0.70 AND no high-weight good missed -> 4
+      ratio >= 0.50                                -> 3
+      ratio >= 0.30                                -> 2
+      ratio <  0.30                                -> 1
+
+    Critical bad signal override: if any bad signal with critical=true
+    fires, cap the final score at its cap_at_score regardless of the
+    threshold table.
+
+output_schema:
+  type: object
+  required: [score, signals, feedback, top_actions]
+  additionalProperties: false
+  properties:
+    score:
+      type: number
+      minimum: 1
+      maximum: 5
+    signals:
+      type: object
+      description: "Keyed by signal id from the build rubric. One entry per signal."
+      additionalProperties:
+        type: object
+        required: [result, evidence]
+        additionalProperties: false
+        properties:
+          result:
+            enum: [hit, partial, miss, cannot_evaluate]
+          evidence:
+            type: string
+            maxLength: 500
+    feedback:
+      type: string
+      maxLength: 3000
+      description: "Synthesis: how the build executed against the plan, what the candidate steered well, what slipped. Per-signal reasoning belongs in signals[*].evidence."
+    top_actions:
+      type: array
+      maxItems: 5
+      items:
+        type: string
+        maxLength: 200
+    bad_signals_fired:
+      type: array
+      description: "Ids of bad signals (polarity=bad) that fired."
+      items:
+        type: string

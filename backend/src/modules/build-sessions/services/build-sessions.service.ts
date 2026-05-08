@@ -1,8 +1,10 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { BuildEventsRepository } from '../repositories/build-events.repository';
@@ -10,6 +12,7 @@ import { BuildAIInteractionsRepository } from '../repositories/build-ai-interact
 import { BuildTokenService, MintedToken } from './build-token.service';
 import { IncomingBuildEvent } from '../types/build-event.types';
 import { BuildAIInteractionDto } from '../dto/build-ai-interaction.dto';
+import { OrchestratorService } from '../../evaluations/services/orchestrator.service';
 
 @Injectable()
 export class BuildSessionsService {
@@ -20,6 +23,8 @@ export class BuildSessionsService {
     private readonly tokens: BuildTokenService,
     private readonly events: BuildEventsRepository,
     private readonly aiInteractions: BuildAIInteractionsRepository,
+    @Inject(forwardRef(() => OrchestratorService))
+    private readonly orchestrator: OrchestratorService,
   ) {}
 
   async startBuildPhase(sessionId: string): Promise<MintedToken> {
@@ -94,8 +99,16 @@ export class BuildSessionsService {
     this.logger.log(
       `Build phase finished for session ${sessionId} ` +
         `(${updated.buildEventCount} events captured). ` +
-        `BuildAgent dispatch is phase 4 work — not running yet.`,
+        'Dispatching BuildAgent in the background.',
     );
+    // Fire-and-forget. The CLI shouldn't wait on the LLM call; failure
+    // surfaces only in logs. The orchestrator handles its own retries
+    // and downstream mentor dispatch.
+    this.orchestrator.run(sessionId, ['build']).catch((err) => {
+      this.logger.warn(
+        `Background buildAgent.run(${sessionId}) crashed: ${(err as Error).message}`,
+      );
+    });
     return { ok: true, eventCount: updated.buildEventCount };
   }
 }

@@ -123,6 +123,13 @@ export function SessionResultsPage() {
     enabled: !!rubricVersion,
   });
 
+  const buildRubricQuery = useQuery({
+    queryKey: ['rubric', rubricVersion, 'build', rubricMode, rubricSeniority],
+    queryFn: () =>
+      rubricsService.get(rubricVersion!, 'build', rubricMode, rubricSeniority),
+    enabled: !!rubricVersion,
+  });
+
   const questionQuery = useQuery({
     queryKey: ['question', questionId],
     queryFn: () => questionsService.get(questionId!),
@@ -153,6 +160,10 @@ export function SessionResultsPage() {
   // API orders desc by evaluatedAt — planEvals[0] is the latest.
   const planEvals = useMemo<PhaseEvaluation[]>(
     () => (evalsQuery.data ?? []).filter((e) => e.phase === 'plan'),
+    [evalsQuery.data],
+  );
+  const buildEvals = useMemo<PhaseEvaluation[]>(
+    () => (evalsQuery.data ?? []).filter((e) => e.phase === 'build'),
     [evalsQuery.data],
   );
   const displayedEval = useMemo<PhaseEvaluation | undefined>(() => {
@@ -269,6 +280,20 @@ export function SessionResultsPage() {
       )}
 
       {session.status === 'completed' && <BuildPhaseSection session={session} />}
+
+      {buildEvals[0] && (
+        <section>
+          <h3 className="text-xs font-medium text-gray-700 uppercase tracking-wide mb-2">
+            Build evaluation
+          </h3>
+          <PlanEvaluationView
+            evaluation={buildEvals[0]}
+            rubric={buildRubricQuery.data}
+            isLatest={true}
+            onShowLatest={() => undefined}
+          />
+        </section>
+      )}
 
       <section>
         <button

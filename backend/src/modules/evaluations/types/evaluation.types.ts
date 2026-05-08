@@ -24,6 +24,37 @@ export interface PhaseEvalInput {
   mode?: Mode | null;
   seniority?: Seniority | null;
   model?: string;
+  buildContext?: BuildContext;
+}
+
+export interface BuildContext {
+  startedAt: Date | null;
+  endedAt: Date | null;
+  events: Array<{
+    filePath: string;
+    action: 'created' | 'modified' | 'deleted';
+    contentDiff: string | null;
+    occurredAt: Date;
+  }>;
+  finalTree: Array<{
+    path: string;
+    size: number;
+    sha1: string;
+  }>;
+  keyFileSnippets: Array<{
+    path: string;
+    content: string;
+  }>;
+  aiTurns: Array<{
+    externalSessionId: string;
+    turnIndex: number;
+    role: 'user' | 'assistant' | 'tool';
+    text: string | null;
+    toolName: string | null;
+    toolInputSummary: string | null;
+    toolResultSummary: string | null;
+    occurredAt: Date;
+  }>;
 }
 
 export interface SignalResult {

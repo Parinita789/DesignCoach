@@ -1,0 +1,60 @@
+schema_version: 2
+rubric_version: v2.0
+phase: build
+mode: design
+phase_name: "Build (Design mode)"
+extends: build.shared.yaml
+
+goal: |
+  Design-mode candidates are not expected to ship a working system.
+  The build phase here captures whatever artifacts the candidate
+  produced after the plan — usually small sketches, prototype slices,
+  diagrams committed as files, or no captured events at all. Score
+  effort and coherence against the plan, not implementation breadth.
+
+time_bounds:
+  target_min_minutes: 0
+  target_max_minutes: 25
+  flag_under_minutes: 0
+  flag_over_minutes: 30
+  note: |
+    Design-mode sessions often have empty build phases. That's
+    expected — there is no follow-up build against the design plan in
+    the same session. Score what was captured; don't penalize absence.
+
+override_signals:
+  test_appropriateness:
+    weight: low
+  no_tests:
+    weight: low
+  incremental_build:
+    weight: low
+  commit_dump:
+    weight: low
+
+scoring:
+  anchors:
+    5: |
+      Captured artifacts (small prototype slices, diagrams, additional
+      plan.md elaboration) line up tightly with the plan's seams and
+      bottlenecks. AI was used as a collaborator. No bad signals fire.
+    4: |
+      Captured artifacts are coherent with the plan. Minor gaps or
+      drift, acknowledged where present.
+    3: |
+      Some captured artifacts but they only partially match the plan,
+      or drift goes unacknowledged. Medium bad signals may fire.
+    2: |
+      Captured artifacts contradict the plan's main decisions, OR
+      ai_dictation fires.
+    1: |
+      No captured events whatsoever in a session that the candidate
+      explicitly opened a build phase for, OR captured artifacts show
+      effort that ignores the plan entirely.
+  calibration_note: |
+    Design mode has no implementation expectation. Empty build phases
+    are common and not a fault. The signals to lean on are
+    code_matches_plan, structure_soundness, design_evolution_coherence,
+    and the AI usage signals. Test signals are deliberately
+    deweighted; if the candidate produced no test files, prefer
+    cannot_evaluate over miss.

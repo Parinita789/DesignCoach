@@ -30,6 +30,24 @@ export class BuildAIInteractionsRepository {
     return result.count;
   }
 
+  // All turns in chronological order for the build evaluator's prompt.
+  findAllForSession(sessionId: string) {
+    return this.prisma.buildAIInteraction.findMany({
+      where: { sessionId },
+      orderBy: { occurredAt: 'asc' },
+      select: {
+        externalSessionId: true,
+        turnIndex: true,
+        role: true,
+        text: true,
+        toolName: true,
+        toolInputSummary: true,
+        toolResultSummary: true,
+        occurredAt: true,
+      },
+    });
+  }
+
   async countsForSession(sessionId: string): Promise<{
     total: number;
     distinctSessions: number;
