@@ -281,7 +281,7 @@ export function SessionResultsPage() {
 
       {session.status === 'completed' && <BuildPhaseSection session={session} />}
 
-      {buildEvals[0] && (
+      {session.status === 'completed' && buildEvals[0] && (
         <section>
           <h3 className="text-xs font-medium text-gray-700 uppercase tracking-wide mb-2">
             Build evaluation
@@ -291,6 +291,8 @@ export function SessionResultsPage() {
             rubric={buildRubricQuery.data}
             isLatest={true}
             onShowLatest={() => undefined}
+            phaseLabel="Build"
+            signalMentorEnabled={false}
           />
         </section>
       )}
@@ -324,11 +326,17 @@ function PlanEvaluationView({
   rubric,
   isLatest,
   onShowLatest,
+  phaseLabel = 'Plan',
+  signalMentorEnabled = true,
 }: {
   evaluation: PhaseEvaluation;
   rubric: Rubric | undefined;
   isLatest: boolean;
   onShowLatest: () => void;
+  phaseLabel?: string;
+  // Build evals don't get signal-mentor coverage yet (Phase 5). Disable
+  // the query so the page doesn't 404-poll forever.
+  signalMentorEnabled?: boolean;
 }) {
   const goodSignals = rubric?.signals.filter((s) => s.polarity === 'good') ?? [];
   const badSignals = rubric?.signals.filter((s) => s.polarity === 'bad') ?? [];
@@ -342,6 +350,7 @@ function PlanEvaluationView({
   const signalMentorQuery = useQuery({
     queryKey: ['signal-mentor', evaluation.id],
     queryFn: () => signalMentorService.get(evaluation.id),
+    enabled: signalMentorEnabled,
     retry: false,
     refetchInterval: (q) => {
       const data = q.state.data;
@@ -360,7 +369,7 @@ function PlanEvaluationView({
     <>
       <section className="rounded border border-gray-300 bg-white px-4 py-3 flex items-center gap-4">
         <div className="flex items-baseline gap-3">
-          <span className="text-xs uppercase tracking-wide text-gray-500">Plan score</span>
+          <span className="text-xs uppercase tracking-wide text-gray-500">{phaseLabel} score</span>
           <span className="text-3xl font-semibold tabular-nums leading-none">
             {formatScore(evaluation.score)}
             <span className="text-sm text-gray-400 font-normal"> / 5</span>
@@ -411,7 +420,7 @@ function PlanEvaluationView({
       {evaluation.topActionableItems.length > 0 && (
         <section>
           <h3 className="text-xs font-medium text-gray-700 uppercase tracking-wide mb-1">
-            Recommended plan improvements
+            Recommended {phaseLabel.toLowerCase()} improvements
           </h3>
           <ol className="rounded border border-gray-300 bg-white p-3 text-sm space-y-1 list-decimal list-inside">
             {evaluation.topActionableItems.map((item, i) => (

@@ -97,24 +97,24 @@ export class OrchestratorService {
       await this.evalsRepo.createEvaluationAudit(persisted.id, result.audit);
       out.push(persisted);
 
-      // Fire-and-forget mentor generation. Doesn't block the eval HTTP
-      // response — the orchestrator returns once the eval row + audit
-      // are persisted. The mentor LLM call runs in the background;
-      // success persists a mentor_artifacts row + writes prompt+response
-      // to disk. Failures are swallowed by MentorService and only
-      // surface in the logs. The frontend lazy-loads the artifact when
-      // the user opens the section, by which time the call has usually
-      // finished (10-30s typical).
-      this.mentorService.generate(persisted.id, options?.model).catch((err) => {
-        this.logger.warn(
-          `Background mentor.generate(${persisted.id}) crashed: ${(err as Error).message}`,
-        );
-      });
-      this.signalMentorService.generate(persisted.id, options?.model).catch((err) => {
-        this.logger.warn(
-          `Background signalMentor.generate(${persisted.id}) crashed: ${(err as Error).message}`,
-        );
-      });
+      // Fire-and-forget mentor generation. Both the deep-dive mentor and
+      // the signal-mentor agents are still plan-shaped (their prompts and
+      // their hard-coded `'plan'` rubric load are plan-only). Phase 5
+      // makes them phase-aware; until then, only fire on plan-phase evals
+      // so build evals don't get incoherent plan-flavored coaching or
+      // empty signal annotations from a phase/rubric mismatch.
+      if (phase === 'plan') {
+        this.mentorService.generate(persisted.id, options?.model).catch((err) => {
+          this.logger.warn(
+            `Background mentor.generate(${persisted.id}) crashed: ${(err as Error).message}`,
+          );
+        });
+        this.signalMentorService.generate(persisted.id, options?.model).catch((err) => {
+          this.logger.warn(
+            `Background signalMentor.generate(${persisted.id}) crashed: ${(err as Error).message}`,
+          );
+        });
+      }
     }
     return out;
   }
@@ -129,9 +129,13 @@ export class OrchestratorService {
   // the final-state tree, and trims to a prompt-shaped slice. Empty
   // sessions return a buildContext with empty arrays so the agent can
   // still emit cannot_evaluate verdicts cleanly.
+  //
+  // Required (not optional) fields on the session arg: tsc will flag any
+  // future select:-shrinking refactor on getWithQuestion that drops
+  // these columns instead of silently nulling them.
   private async loadBuildContext(
     sessionId: string,
-    session: { buildStartedAt?: Date | null; buildEndedAt?: Date | null },
+    session: { buildStartedAt: Date | null; buildEndedAt: Date | null },
   ): Promise<BuildContext> {
     const [eventRows, aiRows] = await Promise.all([
       this.buildEventsRepo.findAllForSession(sessionId),
@@ -159,12 +163,17 @@ export class OrchestratorService {
       contents: reconstructed.contents,
     });
 
+    const allFileContents = [...reconstructed.contents.entries()].map(
+      ([path, content]) => ({ path, content }),
+    );
+
     return {
-      startedAt: session.buildStartedAt ?? null,
-      endedAt: session.buildEndedAt ?? null,
+      startedAt: session.buildStartedAt,
+      endedAt: session.buildEndedAt,
       events: slimEvents,
       finalTree: reconstructed.tree,
       keyFileSnippets,
+      allFileContents,
       aiTurns: aiTurnsForPrompt,
     };
   }

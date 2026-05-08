@@ -1,17 +1,26 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
+import { Phase } from '../../phase-tagger/types/phase.types';
 import { OrchestratorService } from './orchestrator.service';
 import { EvaluationsRepository } from '../repositories/evaluations.repository';
+import { SessionsService } from '../../sessions/services/sessions.service';
 
 @Injectable()
 export class EvaluationsService {
   constructor(
     private readonly orchestrator: OrchestratorService,
     private readonly evalsRepo: EvaluationsRepository,
+    @Inject(forwardRef(() => SessionsService))
+    private readonly sessionsService: SessionsService,
   ) {}
 
-  // Plan phase only; build/validate/wrap agents are stubs.
-  runForSession(sessionId: string, model?: string) {
-    return this.orchestrator.run(sessionId, ['plan'], { model });
+  // Dispatches every phase the session has artifacts for: plan always,
+  // build only when the build phase has been finalised. validate/wrap
+  // are still stubs and not dispatched here.
+  async runForSession(sessionId: string, model?: string) {
+    const session = await this.sessionsService.getWithQuestion(sessionId);
+    const phases: Phase[] = ['plan'];
+    if (session.buildEndedAt) phases.push('build');
+    return this.orchestrator.run(sessionId, phases, { model });
   }
 
   getBySession(sessionId: string) {

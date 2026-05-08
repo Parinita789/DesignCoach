@@ -45,6 +45,15 @@ export interface BuildContext {
     path: string;
     content: string;
   }>;
+  // Full reconstructed contents for every surviving file. Used only by
+  // the evidence validator's grounding corpus, not by the prompt — the
+  // LLM sees `keyFileSnippets` (top-N capped) instead. Keeps the prompt
+  // small while letting the validator verify quotes from any captured
+  // file the LLM cited.
+  allFileContents: Array<{
+    path: string;
+    content: string;
+  }>;
   aiTurns: Array<{
     externalSessionId: string;
     turnIndex: number;

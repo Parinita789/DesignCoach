@@ -148,14 +148,20 @@ ${calibrationBlock}
 
 ${aiUsageBlock}
 
-## Relevance gating
-Some signals may have an \`applies_to: [...]\` tag in the signal header
-above. Mark those "cannot_evaluate" with a one-sentence reason if the
-session question does not belong to one of the listed domains. Skipped
-signals are excluded from both earned and max totals so they do not
-change the score.
-
+${renderRelevanceGatingBlock(rubric)}
 ${renderOutputBlock(useTools)}`;
+}
+
+function renderRelevanceGatingBlock(rubric: Rubric): string {
+  const hasGated = rubric.signals.some((s) => s.appliesTo && s.appliesTo.length > 0);
+  if (!hasGated) return '';
+  return `## Relevance gating
+Some signals have an \`applies_to: [...]\` tag in the signal header above.
+Mark those "cannot_evaluate" with a one-sentence reason if the session
+question does not belong to one of the listed domains. Skipped signals
+are excluded from both earned and max totals so they do not change the
+score.
+`;
 }
 
 function renderOutputBlock(useTools: boolean): string {

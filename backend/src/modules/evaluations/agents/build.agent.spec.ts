@@ -56,6 +56,7 @@ function makeInput(overrides: Partial<PhaseEvalInput> = {}): PhaseEvalInput {
       ],
       finalTree: [{ path: 'handlers.ts', size: 100, sha1: 'abc' }],
       keyFileSnippets: [{ path: 'handlers.ts', content: 'export const post = ...' }],
+      allFileContents: [{ path: 'handlers.ts', content: 'export const post = ...' }],
       aiTurns: [],
     },
     ...overrides,

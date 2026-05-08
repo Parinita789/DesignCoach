@@ -11,6 +11,7 @@ import { parseEvalOutput, ParsedEvalOutput } from '../validators/parse-eval-outp
 import { validateEvalToolArgs } from '../validators/validate-eval-tool-args';
 import { validateEvidence } from '../validators/evidence-validator';
 import { computeScore } from '../services/score-computer';
+import { truncatePlanMd } from '../helpers/truncate-plan-md';
 
 const BUILD_AGENT_MAX_TOKENS = 4096;
 const INPUT_TOKEN_WARN_THRESHOLD = 150_000;
@@ -41,7 +42,19 @@ export class BuildAgent extends BasePhaseAgent {
         `aiTurns=${ctx?.aiTurns.length ?? 0}, useTools=${useTools})`,
     );
 
-    const { systemBlocks, userMessage } = buildBuildPrompt(rubric, input, { useTools });
+    // Same hard-cap PlanAgent uses; the build prompt also stuffs the plan as
+    // cross-reference, so a 50K-char plan would blow past the input-token
+    // budget on smaller-context models.
+    const truncated = truncatePlanMd(input.planMd);
+    if (truncated.droppedChars > 0) {
+      this.logger.warn(
+        `plan.md truncated for build eval: ${truncated.droppedChars.toLocaleString()} chars omitted ` +
+          `(kept ${truncated.text.length.toLocaleString()} of ${truncated.originalLength.toLocaleString()})`,
+      );
+    }
+    const inputForPrompt: PhaseEvalInput = { ...input, planMd: truncated.text };
+
+    const { systemBlocks, userMessage } = buildBuildPrompt(rubric, inputForPrompt, { useTools });
 
     const llmStart = Date.now();
     const llm = await this.llm.call(
@@ -148,15 +161,23 @@ function buildEvidenceCorpusItems(
   const ctx = input.buildContext;
   if (!ctx) return items;
 
-  for (const f of ctx.keyFileSnippets) {
+  // All file contents, not just the top-N snippets the prompt sees. The
+  // LLM may cite a file we didn't include in keyFileSnippets — without
+  // the full corpus those legitimate quotes would auto-downgrade.
+  for (const f of ctx.allFileContents) {
     items.push({ prompt: f.path, response: f.content });
   }
   for (const t of ctx.aiTurns) {
     const parts = [t.text ?? '', t.toolInputSummary ?? '', t.toolResultSummary ?? ''].filter(Boolean);
     items.push({ prompt: t.role, response: parts.join('\n') });
   }
-  for (const e of ctx.finalTree) {
-    items.push({ prompt: '', response: e.path });
+  // One aggregate entry instead of per-path: short paths (a.ts) can't
+  // ground a 5-gram window, but the full path list as one block can.
+  if (ctx.finalTree.length > 0) {
+    items.push({
+      prompt: 'tree',
+      response: ctx.finalTree.map((e) => e.path).join('\n'),
+    });
   }
   return items;
 }
