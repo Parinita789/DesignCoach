@@ -16,7 +16,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "eval:plan": "ts-node --project eval-harness/tsconfig.json eval-harness/run.ts",
+    "eval:plan": "ts-node --project eval-harness/tsconfig.json eval-harness/run.ts --phase=plan",
+    "eval:build": "ts-node --project eval-harness/tsconfig.json eval-harness/run.ts --phase=build",
+    "eval:all": "ts-node --project eval-harness/tsconfig.json eval-harness/run.ts",
     "migrate:v1-to-v2": "ts-node scripts/migrate-v1-to-v2.ts"
   },
   "dependencies": {

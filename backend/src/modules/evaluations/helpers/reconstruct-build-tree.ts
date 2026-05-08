@@ -49,7 +49,16 @@ export function reconstructBuildTree(events: BuildEventForTree[]): Reconstructed
         brokenPatchPaths.add(e.filePath);
         continue;
       }
-      const patched = applyPatch(prior, e.contentDiff);
+      // applyPatch may throw on malformed hunk headers (the diff
+      // package's parser is strict). Treat exceptions the same as
+      // a `false` return — record the gap, keep the prior content,
+      // and continue with the rest of the timeline.
+      let patched: string | false;
+      try {
+        patched = applyPatch(prior, e.contentDiff);
+      } catch {
+        patched = false;
+      }
       if (patched === false) {
         brokenPatchPaths.add(e.filePath);
         continue;

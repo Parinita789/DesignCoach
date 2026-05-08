@@ -3,8 +3,11 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import {
   Fixture,
+  FixtureAITurn,
+  FixtureBuildEvent,
   FixtureExpectation,
   FixtureHint,
+  FixturePhase,
   FixtureSeniority,
   RubricMode,
   SignalMode,
@@ -13,11 +16,13 @@ import {
 const VALID_MODES: SignalMode[] = ['hit', 'partial', 'miss', 'credited', 'skipped'];
 const VALID_RUBRIC_MODES: RubricMode[] = ['build', 'design'];
 const VALID_SENIORITIES: FixtureSeniority[] = ['junior', 'mid', 'senior', 'staff'];
+const VALID_PHASES: FixturePhase[] = ['plan', 'build'];
 
 interface RawFixtureYaml {
   description?: string;
   question?: string;
   rubricVersion?: string;
+  phase?: string;
   mode?: string;
   seniority?: string;
   expectedScore?: { min?: number; max?: number };
@@ -29,6 +34,8 @@ interface RawFixtureYaml {
     prompt?: string;
     response?: string;
   }>;
+  buildStartedAt?: string;
+  buildEndedAt?: string;
 }
 
 export function loadFixtures(rootDir: string, filter?: string): Fixture[] {
@@ -71,6 +78,17 @@ function loadOne(rootDir: string, name: string): Fixture {
   const expectedScore = parseScoreRange(raw.expectedScore, name);
   const expectedSignals = parseExpectedSignals(raw.expectedSignals, name);
 
+  // phase defaults to 'plan' for back-compat with existing fixtures.
+  let phase: FixturePhase = 'plan';
+  if (raw.phase !== undefined) {
+    if (!VALID_PHASES.includes(raw.phase as FixturePhase)) {
+      throw new Error(
+        `${name}: phase "${raw.phase}" must be one of: ${VALID_PHASES.join(', ')}`,
+      );
+    }
+    phase = raw.phase as FixturePhase;
+  }
+
   let mode: RubricMode | undefined;
   if (raw.mode !== undefined) {
     if (!VALID_RUBRIC_MODES.includes(raw.mode as RubricMode)) {
@@ -104,11 +122,28 @@ function loadOne(rootDir: string, name: string): Fixture {
     response: requireString(h.response, `${name}.hints[${i}].response`),
   }));
 
+  let events: FixtureBuildEvent[] | undefined;
+  let aiTurns: FixtureAITurn[] | undefined;
+  let buildStartedAt: string | undefined;
+  let buildEndedAt: string | undefined;
+  if (phase === 'build') {
+    const eventsPath = path.join(dir, 'events.jsonl');
+    if (!fs.existsSync(eventsPath)) {
+      throw new Error(`Fixture ${name} (phase=build) is missing events.jsonl at ${eventsPath}`);
+    }
+    events = parseEventsJsonl(eventsPath, name);
+    const aiPath = path.join(dir, 'ai-turns.jsonl');
+    aiTurns = fs.existsSync(aiPath) ? parseAiTurnsJsonl(aiPath, name) : [];
+    buildStartedAt = raw.buildStartedAt;
+    buildEndedAt = raw.buildEndedAt;
+  }
+
   return {
     name,
     description,
     question,
     rubricVersion,
+    phase,
     mode,
     seniority,
     planMd: planMd.length > 0 ? planMd : null,
@@ -116,7 +151,64 @@ function loadOne(rootDir: string, name: string): Fixture {
     expectedSignals,
     warnOnly: raw.warnOnly === true,
     hints,
+    events,
+    aiTurns,
+    buildStartedAt,
+    buildEndedAt,
   };
+}
+
+function parseEventsJsonl(filePath: string, name: string): FixtureBuildEvent[] {
+  const lines = fs.readFileSync(filePath, 'utf8').split('\n').filter((l) => l.trim().length > 0);
+  return lines.map((line, i) => {
+    let row: Record<string, unknown>;
+    try {
+      row = JSON.parse(line) as Record<string, unknown>;
+    } catch (err) {
+      throw new Error(`${name}: events.jsonl line ${i + 1} is not valid JSON: ${(err as Error).message}`);
+    }
+    const action = String(row.action ?? '');
+    if (action !== 'created' && action !== 'modified' && action !== 'deleted') {
+      throw new Error(
+        `${name}: events.jsonl line ${i + 1} action must be created/modified/deleted (got "${action}")`,
+      );
+    }
+    return {
+      filePath: requireString(row.filePath, `${name}.events[${i}].filePath`),
+      action,
+      content: row.content == null ? null : String(row.content),
+      contentDiff: row.contentDiff == null ? null : String(row.contentDiff),
+      occurredAt: requireString(row.occurredAt, `${name}.events[${i}].occurredAt`),
+    };
+  });
+}
+
+function parseAiTurnsJsonl(filePath: string, name: string): FixtureAITurn[] {
+  const lines = fs.readFileSync(filePath, 'utf8').split('\n').filter((l) => l.trim().length > 0);
+  return lines.map((line, i) => {
+    let row: Record<string, unknown>;
+    try {
+      row = JSON.parse(line) as Record<string, unknown>;
+    } catch (err) {
+      throw new Error(`${name}: ai-turns.jsonl line ${i + 1} is not valid JSON: ${(err as Error).message}`);
+    }
+    const role = String(row.role ?? '');
+    if (role !== 'user' && role !== 'assistant' && role !== 'tool') {
+      throw new Error(
+        `${name}: ai-turns.jsonl line ${i + 1} role must be user/assistant/tool (got "${role}")`,
+      );
+    }
+    return {
+      externalSessionId: requireString(row.externalSessionId, `${name}.aiTurns[${i}].externalSessionId`),
+      turnIndex: requireNumber(row.turnIndex, `${name}.aiTurns[${i}].turnIndex`),
+      role,
+      text: row.text == null ? null : String(row.text),
+      toolName: row.toolName == null ? null : String(row.toolName),
+      toolInputSummary: row.toolInputSummary == null ? null : String(row.toolInputSummary),
+      toolResultSummary: row.toolResultSummary == null ? null : String(row.toolResultSummary),
+      occurredAt: requireString(row.occurredAt, `${name}.aiTurns[${i}].occurredAt`),
+    };
+  });
 }
 
 function parseScoreRange(

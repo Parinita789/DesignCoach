@@ -1,0 +1,28 @@
+description: "Incremental URL-shortener build that mirrors plan.md, adds tests, and acknowledges one deviation. Claude Code conversation shows the candidate steering."
+question: "Design a URL shortener for 100 RPS demo / 10K RPS target."
+rubricVersion: v2.0
+phase: build
+mode: build
+seniority: mid
+
+buildStartedAt: "2026-05-08T09:59:30Z"
+buildEndedAt: "2026-05-08T10:07:00Z"
+
+expectedScore:
+  min: 3.5
+  max: 5.0
+
+expectedSignals:
+  hit:
+    - code_matches_plan
+    - test_appropriateness
+    - design_evolution_coherence
+    - ai_used_as_collaborator
+  miss:
+    - silent_drift
+    - no_tests
+    - commit_dump
+    - ai_dictation
+  credited:
+    - incremental_build
+    - structure_soundness
