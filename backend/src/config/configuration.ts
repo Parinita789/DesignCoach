@@ -9,7 +9,7 @@ export default () => ({
     maxTokens: parseInt(process.env.LLM_MAX_TOKENS ?? '4096', 10),
   },
   rubric: {
-    version: process.env.RUBRIC_VERSION ?? 'v1.0',
+    version: process.env.RUBRIC_VERSION ?? 'v3.0',
     dir: process.env.RUBRIC_DIR ?? './rubrics',
   },
   claudeCode: {

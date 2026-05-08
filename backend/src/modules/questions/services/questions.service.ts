@@ -24,7 +24,7 @@ export class QuestionsService {
   ) {}
 
   async create(dto: CreateQuestionDto): Promise<{ question: Question; session: Session }> {
-    const rubricVersion = this.config.get<string>('RUBRIC_VERSION') ?? 'v2.0';
+    const rubricVersion = this.config.get<string>('RUBRIC_VERSION') ?? 'v3.0';
     const kind = dto.kind ?? classifyKind(dto.prompt);
     const seniority: PrismaSeniority = dto.seniority ?? 'senior';
     const question = await this.questionsRepository.create({

@@ -1,0 +1,448 @@
+# plan.agentic_design.yaml
+# System design interview specifically about an LLM-powered or
+# agent-based system. Same design rigor as traditional, plus agent-
+# infrastructure concerns (cost, latency, validation, providers,
+# nondeterminism, observability, state). No build phase.
+#
+# Note: this rubric duplicates the design signals from
+# plan.traditional_design.yaml. This is intentional under our current
+# linear-inheritance model. If we ever add a fourth mode, refactor to
+# trait composition (see ADR 0008).
+
+schema_version: 2
+rubric_version: v3.0
+phase: plan
+kind: agentic_design
+phase_name: "Plan & Scope (Agentic Design)"
+extends: plan.shared.yaml
+
+goal: |
+  Convert the open-ended interview prompt into a written, scoped
+  design for an LLM-powered production system: in/out, target NFRs,
+  architectural shape with seams, data model, capacity estimates,
+  bottlenecks with mitigations, AND the agent-specific concerns:
+  inference cost, latency, output validation, provider abstraction,
+  nondeterminism, observability, and state management.
+
+time_bounds:
+  target_min_minutes: 25
+  target_max_minutes: 45
+  flag_under_minutes: 15
+  flag_over_minutes: 60
+
+override_signals:
+  explicit_tradeoffs:
+    weight: high
+  clarification_evidence:
+    weight: high
+
+add_signals:
+  # ===== Design-mode signals (duplicated from traditional_design) =====
+
+  - id: shape_and_seams
+    polarity: good
+    weight: high
+    paired_with: shape_without_seams
+    description: |
+      Plan commits to a specific architectural shape AND names 2-3
+      seams where future scale would be added without rewriting.
+      For agentic systems, seams often include the model boundary
+      (swap LLM provider) and the tool boundary (add new tools).
+    judge_notes: |
+      "Service-oriented with a stateless agent runtime, an
+      LlmClient seam for model swap, and a Tool registry seam for
+      adding capabilities" passes. "Microservices" alone fails.
+    evidence_hint: "Quote the shape sentence and each named seam."
+
+  - id: dual_scale_nfrs
+    polarity: good
+    weight: high
+    paired_with: scale_pretense
+    description: |
+      Plan distinguishes demo-scale from target-scale with numeric
+      targets for both. For agentic systems, scale claims should
+      acknowledge the multiplier from per-request fanout (an agent
+      with 4 tool calls = 4x the LLM RPS at backend).
+    judge_notes: |
+      "Demo: 10 concurrent agent sessions; Target: 1000 concurrent
+      sessions × avg 4 LLM calls per session = 4K backend QPS"
+      passes. Single scale claim fails.
+    evidence_hint: "Quote the NFR section."
+
+  - id: capacity_estimation
+    polarity: good
+    weight: high
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: high
+      staff:  high
+    description: |
+      Back-of-envelope capacity numbers — storage, bandwidth,
+      backend QPS, token throughput — derived from target scale.
+    judge_notes: |
+      "1M DAU × 5 sessions × 4 calls = 20M calls/day = 230 QPS avg,
+      ~700 QPS peak; storing prompt+response avg 4KB = 80 GB/day"
+      passes. Numbers don't have to be precisely right.
+    evidence_hint: "Quote the capacity numbers and the derivation."
+
+  - id: bottleneck_identification
+    polarity: good
+    weight: high
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: high
+      staff:  high
+    description: |
+      Plan names the primary bottleneck under target load with a
+      concrete mitigation. For agentic systems, common bottlenecks:
+      LLM provider rate limits, latency stack-up across tool calls,
+      cost per session.
+    judge_notes: |
+      "Provider rate limit at peak: mitigate with token bucket per
+      tier and a fallback to cheaper model" passes. "LLM might be
+      slow" fails.
+    evidence_hint: "Quote the bottleneck + the mitigation."
+
+  - id: read_write_path_differentiation
+    polarity: good
+    weight: medium
+    description: |
+      Plan distinguishes read vs. write paths where the ratio
+      matters. For agentic systems this often manifests as
+      "interactive vs. batch" rather than literal read/write.
+    judge_notes: |
+      cannot_evaluate when the system has no meaningful asymmetry.
+    evidence_hint: "Quote the differentiation section."
+
+  - id: caching_strategy_articulated
+    polarity: good
+    weight: medium
+    description: |
+      Plan names what's cached, eviction strategy, and miss
+      behavior. For agentic systems, prompt caching (provider-level)
+      and response caching (app-level) are distinct concerns.
+    judge_notes: |
+      "Prompt cache on stable system blocks (rubric content); response
+      cache keyed by (prompt-hash, model, temperature=0); LRU
+      eviction" passes. "Add a cache" fails.
+    evidence_hint: "Quote the cache section."
+
+  - id: consistency_model_chosen
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid:    low
+      senior: medium
+      staff:  high
+    description: |
+      Plan names the consistency model for at least one component
+      where it matters.
+    judge_notes: |
+      "Conversation history is read-your-writes per session; cross-
+      session memory is eventually consistent" passes for a chat
+      agent.
+    evidence_hint: "Quote the consistency choice + the justification."
+
+  # ---------- Design-mode BAD signals ----------
+
+  - id: shape_without_seams
+    polarity: bad
+    weight: medium
+    paired_with: shape_and_seams
+    description: |
+      Architectural shape is committed but seams are absent or generic.
+    judge_notes: |
+      For agentic systems, a particularly common miss is hard-coding
+      the model/provider rather than abstracting it.
+    evidence_hint: "Quote the shape sentence and note absent or generic seams."
+
+  - id: scale_pretense
+    polarity: bad
+    weight: medium
+    paired_with: dual_scale_nfrs
+    description: |
+      Plan claims production-grade scale will be built within the
+      design exercise.
+    judge_notes: |
+      "System will handle 100K concurrent agent sessions" without
+      distinguishing architected-for vs built-for fires this.
+    evidence_hint: "Quote the scale claim that conflates demo and production."
+
+  # ===== Agentic-infra signals (also appear in agentic_build) =====
+
+  - id: inference_cost_articulated
+    polarity: good
+    weight: high
+    weight_by_seniority:
+      junior: medium
+      mid:    high
+      senior: high
+      staff:  high
+    description: |
+      Plan articulates per-request inference cost (tokens, dollars,
+      or a rough cost class) and how it scales with usage. At
+      minimum: which model tier, why that tier, and a back-of-
+      envelope of the dominant cost-per-action.
+    judge_notes: |
+      "Each query runs Sonnet at ~$0.02/call; at 1M DAU × 5 queries/
+      day that's $100K/day — we cap free tier at 50/day and route
+      over-cap to Haiku" passes. "Will use Claude" fails. "We accept
+      that LLM costs are non-trivial" without numbers fails.
+    evidence_hint: "Quote the cost reasoning passage."
+    requires_evidence: [plan]
+
+  - id: latency_strategy_for_agent_calls
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: high
+      staff:  high
+    description: |
+      Plan addresses latency stack-up from sequential or fanned-out
+      LLM calls and names a UX pattern appropriate to that budget —
+      streaming, async with callback, optimistic UI, batch
+      boundary, etc.
+    judge_notes: |
+      "Agent loop is up to 4 tool calls @ ~3s p95 each = 12s wall;
+      we stream incremental thoughts to the UI and only block the
+      submit button on the final write" passes. Silence fails.
+      "We'll use streaming" with no consideration of what's actually
+      slow fails.
+    evidence_hint: "Quote the latency reasoning and UX pattern."
+    requires_evidence: [plan]
+
+  - id: output_validation_layer
+    polarity: good
+    weight: high
+    description: |
+      Plan articulates how agent outputs are validated before being
+      trusted: schema check, safety filter, hallucination check,
+      re-prompt path on failure.
+    judge_notes: |
+      "Tool-call args are validated against a JSON schema; on parse
+      failure we re-prompt with the error once, then surface a
+      manual review queue" passes. "We trust the model output"
+      fails. "We'll validate" without saying how fails.
+    evidence_hint: "Quote the validation strategy."
+    requires_evidence: [plan]
+
+  - id: provider_abstraction_and_failover
+    polarity: good
+    weight: medium
+    description: |
+      Plan abstracts the LLM provider behind an interface and
+      considers failover or degraded-mode operation when the
+      primary provider is unavailable, rate-limited, or returns
+      malformed output.
+    judge_notes: |
+      "All calls go through LlmClient; on 429 or 5xx we fall back
+      to a cheaper model, then to a static template" passes. Hard-
+      coded `anthropic.messages.create()` everywhere fails.
+    evidence_hint: "Quote the abstraction + failover sentence."
+    requires_evidence: [plan]
+
+  - id: nondeterminism_handling
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: medium
+      staff:  high
+    description: |
+      Plan acknowledges that agent outputs are non-deterministic and
+      addresses caching, retries, and idempotency in light of that.
+    judge_notes: |
+      "We cache by (prompt-hash, model, temperature=0); retries on
+      transient errors are safe because we're at temperature 0; user
+      retries explicit-only" passes. Silence fails.
+    evidence_hint: "Quote the caching/retry reasoning."
+    requires_evidence: [plan]
+
+  - id: agent_observability
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: medium
+      staff:  high
+    description: |
+      Plan addresses logging the *content* of agent interactions
+      (prompts, completions, tool calls, intermediate reasoning),
+      not just metrics.
+    judge_notes: |
+      "Every LLM call is persisted with prompt + response + model +
+      tokens + parent-trace-id" passes. "Standard APM" without
+      content logging fails.
+    evidence_hint: "Quote the content-logging strategy."
+    requires_evidence: [plan]
+
+  - id: agent_state_management
+    polarity: good
+    weight: medium
+    description: |
+      Plan addresses how agent state is maintained across calls —
+      or explicitly justifies stateless design. For multi-turn
+      agents: where does conversation history live, how is it
+      bounded, how is it isolated per user/session?
+    judge_notes: |
+      "Each session has Redis-backed memory capped at 8K tokens with
+      summarization of older turns" passes. "Agent is stateless
+      because the task is single-turn" passes for an obviously
+      stateless design.
+    evidence_hint: "Quote the state strategy or stateless justification."
+    requires_evidence: [plan]
+
+  - id: tool_error_recovery
+    polarity: good
+    weight: high
+    weight_by_seniority:
+      junior: medium
+      mid:    high
+      senior: high
+      staff:  high
+    description: |
+      Plan addresses what happens when a tool call inside the agent
+      loop fails — retry policy, replanning, fallback path, or
+      escalation to the user.
+    judge_notes: |
+      "Tool calls retry once on transient errors; on persistent
+      failure the agent asks the user to clarify or surfaces the
+      error" passes. Silence on tool-call failure modes fails.
+    evidence_hint: "Quote the tool-error handling section."
+    requires_evidence: [plan]
+
+  - id: stopping_criteria
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: high
+      staff:  high
+    description: |
+      Plan articulates how the agent loop terminates: max
+      iterations, cost ceiling, completion signal, or combination.
+      Without this, the system is one prompt away from an unbounded
+      cost incident.
+    judge_notes: |
+      "Loop caps at 8 iterations OR $0.50 OR explicit done signal,
+      whichever first" passes. "The agent stops when finished"
+      fails — that's not a criterion, it's a hope.
+    evidence_hint: "Quote the stopping criteria."
+    requires_evidence: [plan]
+
+  - id: judicious_llm_usage
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: high
+      staff:  high
+    description: |
+      Plan demonstrates judgment about when to use an LLM and when
+      to use deterministic code. Identifies at least one place
+      where a non-LLM approach is preferred.
+    judge_notes: |
+      "Email validation is regex; LLM only handles freeform
+      classification because rules can't capture the nuance"
+      passes. A plan that uses LLM calls for everything including
+      trivially-deterministic operations fails.
+    evidence_hint: "Quote the LLM-vs-deterministic boundary."
+    requires_evidence: [plan]
+
+  - id: evaluation_strategy_sketched
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: medium
+      staff:  high
+    description: |
+      Plan sketches how the system's quality will be measured over
+      time: regression suite, LLM-as-judge with human calibration,
+      production sampling, A/B testing, drift detection.
+    judge_notes: |
+      "Versioned eval fixtures with expected score ranges; LLM-judge
+      agreement measured monthly against 50 hand-graded examples;
+      shadow-traffic comparison on prompt changes" passes.
+      "We'll monitor errors" fails.
+    evidence_hint: "Quote the eval/quality strategy section."
+    requires_evidence: [plan]
+
+  - id: context_budget_management
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid:    low
+      senior: medium
+      staff:  medium
+    description: |
+      For multi-step or multi-turn agents: plan addresses how
+      context grows across iterations and how it's bounded.
+    judge_notes: |
+      "Context capped at 32K; older turns summarized to a running
+      memory; tool outputs >2K replaced with a reference id"
+      passes. cannot_evaluate for a clearly single-turn design.
+    evidence_hint: "Quote the context strategy."
+    requires_evidence: [plan]
+
+# Add design-mode-specific required sections + AI usage section.
+override_pass_bar:
+  add_sections:
+    - id: architectural_shape_and_seams
+      name: "Architectural shape and seams"
+      must_contain:
+        - "One-sentence description of the system's overall structure"
+        - "2-3 named seams tied to target-scale concerns"
+    - id: capacity_estimation_section
+      name: "Capacity estimation"
+      must_contain:
+        - "Back-of-envelope numbers for storage, bandwidth, and request throughput"
+    - id: bottlenecks_and_mitigations
+      name: "Bottlenecks and mitigations"
+      must_contain:
+        - "At least one named bottleneck and a concrete mitigation"
+    - id: agent_infra_section
+      name: "Agent infrastructure"
+      must_contain:
+        - "Inference cost reasoning with at least one numeric estimate"
+        - "Output validation strategy"
+        - "Provider abstraction and degraded-mode behavior"
+
+scoring:
+  anchors:
+    5: |
+      Pass bar fully met. Plan demonstrates BOTH scale-aware
+      design reasoning (seams tied to NFRs, capacity, bottleneck
+      with mitigation) AND solid agentic-infra discipline (cost
+      with numbers, validation strategy, provider abstraction,
+      observability of agent content). No bad signals fire.
+    4: |
+      Pass bar met. Most good signals hit including all high-weight
+      ones. Minor gaps in medium-weight signals.
+    3: |
+      Pass bar met but multiple high-weight signals are partial or
+      missed (e.g., cost reasoning absent, no output validation,
+      no bottleneck named). Some medium bad signals.
+    2: |
+      Pass bar partially missed, OR multiple high-weight good
+      signals missed.
+    1: |
+      No plan.md, OR plan exists but is functionally empty.
+  calibration_note: |
+    Agentic design is BOTH design and agent-infra. A plan with great
+    seams and capacity numbers but no inference-cost reasoning is a
+    design plan masquerading as an agentic-design plan. A plan with
+    great cost/validation reasoning but no bottleneck or capacity
+    estimate is an agentic-infra plan masquerading as a system
+    design. Both halves matter.

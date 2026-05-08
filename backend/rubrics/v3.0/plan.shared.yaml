@@ -1,0 +1,296 @@
+# plan.shared.yaml
+# Truly universal pass-bar content. Every plan rubric (traditional design,
+# agentic design, agentic build) extends this file.
+#
+# What lives here: requirements that are mode-independent. A scope section
+# is required everywhere. A data model is required everywhere. Tradeoffs
+# are required everywhere.
+#
+# What does NOT live here: anything specific to one or two modes. Build
+# concerns (tool libraries, component interfaces, code-before-plan) live
+# in agentic_build. Design concerns (shape & seams, capacity, bottlenecks)
+# live in the design rubrics. Agentic concerns (cost, validation,
+# providers) live in agentic_design and agentic_build.
+#
+# When in doubt: if a signal can't be evaluated in one of the three modes
+# (it's always cannot_evaluate), it does not belong here.
+
+schema_version: 2
+phase: plan
+
+weight_values:
+  high: 3
+  medium: 2
+  low: 1
+
+pass_bar:
+  description: |
+    A plan.md file exists at the project root. It contains all required
+    sections below, each non-empty.
+  required_artifact: "plan.md at project root"
+  required_sections:
+    - id: scope
+      name: "Scope"
+      must_contain:
+        - "Explicit list of in-scope features"
+        - "Explicit list of out-of-scope features"
+    - id: functional_requirements
+      name: "Functional requirements"
+      must_contain:
+        - "List of what the system must do"
+    - id: non_functional_requirements
+      name: "Non-functional requirements"
+      must_contain:
+        - "Numeric targets (latency, throughput, scale, availability) appropriate to mode"
+    - id: data_model
+      name: "Data model"
+      must_contain:
+        - "Entities with key fields"
+        - "Relationships between entities, if any"
+    - id: failure_modes
+      name: "Failure modes"
+      must_contain:
+        - "List of failure modes the design or build will handle"
+        - "List of failure modes explicitly punted out of scope"
+
+signals:
+  # ---------- Universal GOOD signals ----------
+
+  - id: scope_specificity
+    polarity: good
+    weight: high
+    description: |
+      Scope names 2-4 specific, buildable-or-designable features.
+      Features are concrete (named endpoints, operations, or
+      user-facing behaviors), not abstract.
+    judge_notes: |
+      Each feature must be concrete enough to write a one-line
+      acceptance criterion for. Vague names fail this signal even if
+      count is right.
+    evidence_hint: "Quote the in-scope features list verbatim."
+
+  - id: scope_realism
+    polarity: good
+    weight: high
+    description: |
+      Total scope is plausible for the time and mode. Build mode:
+      buildable in remaining time. Design mode: depth-articulable in
+      remaining time.
+    judge_notes: |
+      Apply "defensible, not optimal." Ambitious-but-not-absurd is fine.
+    evidence_hint: "Quote the in-scope list and reference the time budget."
+
+  - id: scope_cuts
+    polarity: good
+    weight: medium
+    paired_with: missing_or_trivial_cuts
+    description: |
+      Plan explicitly lists 2+ out-of-scope items. Cuts are non-trivial.
+    judge_notes: |
+      "Out of scope: nothing" or absurd cuts fail. Cuts should reflect
+      real tradeoffs.
+    evidence_hint: "Quote the out-of-scope list verbatim."
+
+  - id: clarification_evidence
+    polarity: good
+    weight: medium
+    description: |
+      Plan shows evidence the candidate considered key clarifying
+      dimensions before committing to scope: data shape, latency,
+      scale, retention, consistency, and (for AI systems) context
+      window / memory.
+    judge_notes: |
+      Look for explicit "assumed:" / "given:" entries or an
+      assumptions section. The signal is about visibility of thought,
+      not correctness of assumptions. Plan should address 2-3
+      dimensions relevant to the prompt; irrelevant dimensions don't
+      count.
+    evidence_hint: "Quote 'assumed:' / 'given:' entries or the assumptions section."
+
+  - id: explicit_tradeoffs
+    polarity: good
+    weight: medium
+    paired_with: tradeoffs_as_platitudes
+    description: |
+      Plan names 2-3 explicit trade-offs accepted, with reasoning that
+      ties each to a stated requirement or constraint.
+    judge_notes: |
+      A trade-off has two sides and a reasoned choice between them.
+      Examples: "chose eventual consistency over strong consistency
+      because read latency is the bottleneck"; "chose pull over push
+      because clients are mobile and battery-sensitive".
+    evidence_hint: "Quote the trade-offs section."
+
+  - id: data_model_committed
+    polarity: good
+    weight: high
+    description: |
+      Plan commits to entities, their key fields, and relationships in
+      plan.md. Granularity is appropriate to mode: design mode names
+      entities and key fields without DDL; build mode may include
+      more concrete schemas.
+    judge_notes: |
+      Examples: "Url(id, slug, target, click_count)"; "Counter(id,
+      value, owner_id)"; "ChatRoom(id, members[], created_at) +
+      Message(id, room_id, body)". Full DDL is NOT required at this
+      level.
+    evidence_hint: "Quote the entities + key fields."
+
+  - id: failure_modes_articulated
+    polarity: good
+    weight: medium
+    paired_with: no_failure_mode_articulation
+    description: |
+      Plan names failure modes that will be handled and failure modes
+      explicitly punted. Punted failure modes are real (not
+      strawmen).
+    judge_notes: |
+      "Failures handled: invalid slug (404), DB unreachable (retry
+      once then 500). Punted: partial DB writes" passes. "Will handle
+      errors gracefully" fails.
+    evidence_hint: "Quote 2-3 handled failures and 2-3 punted ones."
+
+  # ---------- Universal BAD signals ----------
+
+  - id: missing_or_trivial_cuts
+    polarity: bad
+    weight: medium
+    paired_with: scope_cuts
+    description: |
+      plan.md lacks an out-of-scope section, OR contains only trivial
+      cuts (items nobody plausibly would have included).
+    judge_notes: |
+      Missing section is a pass-bar failure. Trivial cuts: judge
+      whether a reasonable candidate might have included this if not
+      being disciplined.
+    evidence_hint: "Quote the out-of-scope section or note absence."
+
+  - id: tradeoffs_as_platitudes
+    polarity: bad
+    weight: low
+    paired_with: explicit_tradeoffs
+    description: |
+      Plan mentions trade-offs but uses generic, content-free language
+      ("considered the tradeoffs", "balanced the concerns") without
+      naming what was traded for what.
+    judge_notes: |
+      Lower weight because it's a quality issue, not a structural one.
+      The candidate is gesturing at the concept without engaging.
+    evidence_hint: "Quote the platitude phrasing."
+
+  - id: no_failure_mode_articulation
+    polarity: bad
+    weight: medium
+    paired_with: failure_modes_articulated
+    description: |
+      Failure modes section is absent, empty, or filled with generic
+      platitudes ("handle errors gracefully") rather than specific
+      failures.
+    judge_notes: |
+      Generic claims fail; specific failures with handling strategy
+      pass.
+    evidence_hint: "Quote the failure-modes section verbatim, or note absence."
+
+# ---------- Universal judge calibration ----------
+
+judge_calibration:
+  - "Apply 'defensible, not optimal' to all judgment-based criteria. A choice or tradeoff is acceptable if a reasonable senior engineer could justify it given the candidate's stated requirements, even if you'd choose differently."
+  - "Boring, simple, well-fitted choices are good. Don't penalize unconventional choices that are explicitly justified."
+  - "When the candidate preemptively addresses an obvious objection, treat it charitably."
+  - "Process criteria (was X written down?) are mechanical checks. Quality criteria (was X done well?) require domain reasoning under the framing above."
+  - "Mode matters: traditional design and agentic design are PURELY about the plan; there is no build phase to refer to. Build mode is about a plan that constrains an actual build."
+
+# ---------- Universal scoring computation ----------
+
+scoring:
+  scale_min: 1
+  scale_max: 5
+  default_score: null
+  computation: |
+    For each good signal: assign 0 (miss / cannot_evaluate), 0.5
+    (partial), or 1.0 (hit). Multiply by weight_values[signal.weight].
+    Sum across all good signals = good_score.
+
+    max_score = sum of weight_values for every good signal that is
+    NOT cannot_evaluate. (Skipped signals are excluded from BOTH
+    numerator and denominator so they don't drag the score down.)
+
+    For each bad signal:
+      - HIT      → subtract weight_values[bad.weight]
+      - PARTIAL  → subtract weight_values[bad.weight] * 0.5
+      - MISS / cannot_evaluate → no deduction
+
+    For pairs (paired_with): the bad's deduction stands alone. The
+    paired good's MISS contributes 0 to good_score; the pairing is
+    for reporting consistency, not double-counting.
+
+    ratio = max(0, good_score - bad_deductions) / max_score
+
+    Threshold table:
+      ratio >= 0.85 AND no high-weight good missed → 5
+      ratio >= 0.70 AND no high-weight good missed → 4
+      ratio >= 0.50                                → 3
+      ratio >= 0.30                                → 2
+      ratio <  0.30                                → 1
+
+    Critical bad signal override: if any bad signal with critical=true
+    fires, cap the final score at its cap_at_score regardless of the
+    threshold table.
+
+# ---------- Universal output schema ----------
+
+output_schema:
+  type: object
+  required: [score, signals, feedback, top_actions, gap_topics]
+  additionalProperties: false
+  properties:
+    score:
+      type: number
+      minimum: 1
+      maximum: 5
+    signals:
+      type: object
+      description: "Keyed by signal id from the rubric. One entry per signal."
+      additionalProperties:
+        type: object
+        required: [result, evidence]
+        additionalProperties: false
+        properties:
+          result:
+            enum: [hit, partial, miss, cannot_evaluate]
+          evidence:
+            type: string
+            maxLength: 500
+    feedback:
+      type: string
+      maxLength: 3000
+      description: "Synthesis: mode classification, score rationale, top themes. Per-signal reasoning belongs in signals[*].evidence, not here."
+    top_actions:
+      type: array
+      maxItems: 5
+      items:
+        type: string
+        maxLength: 200
+    gap_topics:
+      type: array
+      maxItems: 5
+      description: "System-design topics directly relevant to THIS question that the candidate missed or only lightly touched. Empty array is correct when nothing is missing."
+      items:
+        type: object
+        required: [name, coverage, why_expected]
+        additionalProperties: false
+        properties:
+          name:
+            type: string
+            description: "From the canonical topics vocabulary (cache_aside, sharding, idempotency, capacity_estimation, etc.)."
+          coverage:
+            enum: [missed, lightly_touched]
+          why_expected:
+            type: string
+            maxLength: 400
+            description: "1-2 sentences citing what about THIS question makes the topic expected."
+    bad_signals_fired:
+      type: array
+      description: "Ids of bad signals (polarity=bad) that fired."
+      items:
+        type: string

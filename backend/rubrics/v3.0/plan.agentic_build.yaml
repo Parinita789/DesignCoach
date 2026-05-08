@@ -1,0 +1,314 @@
+# plan.agentic_build.yaml
+# 1-hour interview where the candidate plans, then builds. The plan
+# constrains the build, and a separate build-phase rubric scores the
+# build itself. AI assistance is in scope for both phases.
+
+schema_version: 2
+rubric_version: v3.0
+phase: plan
+kind: agentic_build
+phase_name: "Plan & Scope (Agentic Build)"
+extends: plan.shared.yaml
+
+goal: |
+  Convert the prompt into a written plan that constrains the
+  upcoming build phase: scope, NFRs, tool choices, data model,
+  component boundaries, key interfaces, failure modes, and AI usage
+  strategy. The plan is a tool that should make the next ~40 minutes
+  of building faster and less ambiguous.
+
+time_bounds:
+  target_min_minutes: 10
+  target_max_minutes: 20
+  flag_under_minutes: 5
+  flag_over_minutes: 25
+  note: |
+    Build mode targets a SHORT planning phase. Excessive planning
+    leaves no time to build. The build-phase rubric scores the
+    actual implementation against this plan.
+
+add_signals:
+  # ===== Build-mode-specific GOOD signals =====
+
+  - id: tool_reasoning
+    polarity: good
+    weight: medium
+    description: |
+      Each tool/library choice is paired with a one-line reason that
+      references a stated requirement.
+    judge_notes: |
+      Apply "defensible, not optimal" — the signal is reasoning
+      quality, not choice optimality.
+    evidence_hint: "Quote 1-2 tool-choice + reasoning lines."
+
+  - id: tool_stack_completeness
+    polarity: good
+    weight: high
+    description: |
+      Tool choices cover every component named in the architecture,
+      data model, and component boundaries sections. No component
+      is left without a corresponding tool, library, or explicit
+      decision to mock or defer.
+    judge_notes: |
+      Cross-reference the tools section against the rest of plan.md.
+    evidence_hint: "Note any component that lacks a tool / mock / defer note."
+
+  - id: component_boundaries
+    polarity: good
+    weight: medium
+    description: |
+      Plan names modules with one-line responsibilities and states
+      the dependency direction.
+    judge_notes: |
+      "handlers/ -> services/ -> repos/, no skipping" passes.
+      "Modular architecture with separation of concerns" fails.
+    evidence_hint: "Quote the modules list and dependency-direction sentence."
+
+  - id: interfaces_sketched
+    polarity: good
+    weight: medium
+    description: |
+      Key cross-module interfaces are sketched with function/method
+      signatures or near-equivalents. Build-mode-specific because
+      the build will be evaluated against these contracts.
+    judge_notes: |
+      "UrlRepo.create(target) -> slug" passes. "Bucket.tryConsume
+      (tenantId, route, n)" passes. Full type signatures NOT
+      required; intent must be unambiguous.
+    evidence_hint: "Quote 1-2 interface sketches."
+
+  # ===== Build-mode BAD signals =====
+
+  - id: code_before_plan
+    polarity: bad
+    weight: high
+    critical: true
+    cap_at_score: 2
+    description: |
+      Implementation files (handlers, models, schemas) appear in
+      the git log before plan.md is committed. The plan didn't
+      actually constrain anything.
+    judge_notes: |
+      Combined first commits with substantial implementation
+      alongside plan.md are critical violations.
+    evidence_hint: "Quote the offending commit SHA(s) and filenames."
+    requires_evidence: [snapshots]
+
+  - id: data_model_only_in_code
+    polarity: bad
+    weight: high
+    description: |
+      Data model is never written down in plan.md and appears for
+      the first time in models.py / schema.sql / equivalent.
+    judge_notes: |
+      Check whether data model section in plan.md names entities
+      and key fields before any storage implementation file exists
+      in git.
+    evidence_hint: "Note absence of data model in plan.md and quote the implementation file."
+    requires_evidence: [snapshots]
+
+  - id: tool_stack_mismatch
+    polarity: bad
+    weight: high
+    description: |
+      Tool choices listed are insufficient to build the architecture
+      described.
+    judge_notes: |
+      "LLM-powered search" with no LLM tools listed; "real-time
+      notifications" with no queue or websocket tooling.
+    evidence_hint: "Quote the architecture claim and the tools list; describe the gap."
+
+  - id: boundaries_without_interfaces
+    polarity: bad
+    weight: medium
+    description: |
+      Component boundaries are named but no interfaces are sketched
+      between them. Modules exist as labels without contracts.
+    judge_notes: |
+      Without interface sketches, an AI build will fill in arbitrary
+      contracts.
+    evidence_hint: "Quote the modules list and note absent interface sketches."
+
+  - id: ai_authored_plan
+    polarity: bad
+    weight: high
+    requires_evidence: [hints, snapshots]
+    description: |
+      plan.md appears AI-generated and adopted with minimal
+      candidate editing, rather than candidate-authored and
+      AI-refined.
+    judge_notes: |
+      EVIDENCE PRECONDITION: requires hint history AND snapshot
+      timeline. If only plan.md is provided, return cannot_evaluate
+      with evidence "no timing or AI-interaction signal available".
+      When evidence IS available, look for converging signatures:
+      (a) hint history shows a single prompt eliciting a full plan;
+      (b) snapshot timeline shows plan.md materializing in a single
+      large jump after a hint exchange;
+      (c) plan.md is comprehensive-but-generic.
+      Two or more signatures fires.
+    evidence_hint: "List converging signatures with quotes/timestamps."
+
+  # ===== Agentic-infra signals (duplicated from agentic_design) =====
+  # These duplicate plan.agentic_design.yaml. If the rubric set grows,
+  # refactor to trait composition (ADR 0008).
+
+  - id: inference_cost_articulated
+    polarity: good
+    weight: high
+    weight_by_seniority:
+      junior: medium
+      mid:    high
+      senior: high
+      staff:  high
+    description: |
+      Plan articulates per-request inference cost and how it scales.
+    judge_notes: |
+      In build mode, the bar is lower than in design mode — a rough
+      cost class ("Sonnet ~$0.02/call, ~50 calls in this build, so
+      ~$1 of inference") is enough. Silence still fails.
+    evidence_hint: "Quote the cost reasoning."
+    requires_evidence: [plan]
+
+  - id: output_validation_layer
+    polarity: good
+    weight: high
+    description: |
+      Plan articulates how agent outputs will be validated before
+      being trusted in the running system.
+    judge_notes: |
+      In build mode, this often manifests as Zod schemas, JSON
+      schema validators, or explicit re-prompt logic. "We trust
+      the model output" fails.
+    evidence_hint: "Quote the validation strategy."
+    requires_evidence: [plan]
+
+  - id: provider_abstraction_and_failover
+    polarity: good
+    weight: medium
+    description: |
+      LLM calls go through an abstraction; degraded-mode behavior is
+      considered.
+    judge_notes: |
+      In build mode, even a thin wrapper class qualifies. Hard-coded
+      SDK calls everywhere fails.
+    evidence_hint: "Quote the abstraction sketch."
+    requires_evidence: [plan]
+
+  - id: tool_error_recovery
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: high
+      staff:  high
+    description: |
+      Plan addresses what happens when a tool call inside the agent
+      loop fails.
+    judge_notes: |
+      A short retry-or-escalate policy is enough.
+    evidence_hint: "Quote the tool-error handling."
+    requires_evidence: [plan]
+
+  - id: stopping_criteria
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: high
+      staff:  high
+    description: |
+      For agent loops: how the loop terminates.
+    judge_notes: |
+      cannot_evaluate if the system has no agent loop (single LLM
+      call architecture).
+    evidence_hint: "Quote the stopping criteria."
+    requires_evidence: [plan]
+
+  - id: ai_strategy_explicit
+    polarity: good
+    weight: medium
+    paired_with: ai_strategy_absent
+    description: |
+      Plan articulates what will be delegated to AI vs. written by
+      the candidate during the build.
+    judge_notes: |
+      In build mode this is high-signal: a candidate who plans to
+      "have Claude write all the boilerplate while I focus on the
+      agent loop and validation" is making a real decision.
+    evidence_hint: "Quote the AI usage section."
+
+  - id: ai_strategy_absent
+    polarity: bad
+    weight: medium
+    paired_with: ai_strategy_explicit
+    description: |
+      plan.md doesn't articulate AI usage in build mode.
+    judge_notes: |
+      The candidate is about to spend 40 minutes building with AI
+      assistance. Saying nothing about how is a real gap.
+    evidence_hint: "Note absence of AI usage section."
+
+# Build-mode required sections.
+override_pass_bar:
+  add_sections:
+    - id: tool_choices
+      name: "Tool choices"
+      must_contain:
+        - "Chosen stack/libraries"
+        - "One-line reasoning per choice, referencing at least one stated requirement"
+    - id: component_boundaries_section
+      name: "Component boundaries"
+      must_contain:
+        - "Named modules with one-line responsibility per module"
+        - "Statement of which modules can call which (the dependency direction)"
+    - id: key_interfaces
+      name: "Key interfaces"
+      must_contain:
+        - "Function or method sketches for the main cross-module boundaries"
+    - id: ai_usage_plan
+      name: "AI usage plan"
+      must_contain:
+        - "What will be delegated to AI"
+        - "What the candidate will write themselves"
+
+ai_usage_for_this_phase:
+  description: |
+    Plan must be candidate-authored first, then refined with AI —
+    not AI-generated and adopted. In build mode this matters
+    especially because the plan constrains 40 minutes of
+    AI-assisted implementation.
+  good_modes:
+    - "Mode 1 — Autocomplete: candidate has decisions, AI helps express them cleanly"
+    - "Mode 2 — Sparring partner: candidate has draft, AI challenges or surfaces blind spots"
+  bad_modes:
+    - "Mode 3 — Outsourcing: AI generates plan from prompt, candidate adopts with minimal edits"
+  enforced_by: ai_authored_plan
+
+scoring:
+  anchors:
+    5: |
+      Pass bar fully met. Plan is a tight, buildable specification
+      with tool choices that match the architecture, sketched
+      interfaces, named failure modes, an explicit AI usage
+      strategy, and at least minimal agent-infra reasoning (cost
+      class, validation, provider abstraction). No bad signals.
+    4: |
+      Pass bar met. Most good signals hit including all high-weight
+      ones. Minor gaps.
+    3: |
+      Pass bar met but multiple high-weight signals partial or
+      missed.
+    2: |
+      Pass bar partially missed, OR critical bad signal
+      (code_before_plan) fires.
+    1: |
+      No plan.md, OR plan exists but is functionally empty.
+  calibration_note: |
+    Build mode's central question: did this plan reduce ambiguity
+    enough that the next 40 minutes of building won't get stuck on
+    decisions that should have been pre-made? Tool choices, data
+    model, interfaces, and AI usage are the four pre-made decisions
+    that matter most.
