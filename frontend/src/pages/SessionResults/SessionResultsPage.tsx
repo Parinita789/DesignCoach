@@ -163,15 +163,32 @@ export function SessionResultsPage() {
   const deleteMutation = useMutation({
     mutationFn: () => sessionsService.delete(id!),
     onSuccess: () => {
-      // Order matters. If we prune React Query caches first, this still-
-      // mounted page's sessionQuery subscriber notices it has no data and
-      // refetches; the refetch hits 404 (the row is gone) and the error UI
-      // flashes before the route transition commits. Navigate first to
-      // unmount this page, then drop the caches and invalidate the
-      // destination page's queries.
       setDeleteOpen(false);
       if (id) forgetSession(id);
-      navigate(questionId ? `/questions/${questionId}` : '/');
+
+      // Pick the next-most-recent surviving sibling so the user lands on
+      // a real attempt rather than bouncing through the redirect page
+      // (which can race the cache and briefly route to the deleted id).
+      // Prefer completed attempts (they have evaluations); fall back to
+      // any non-self attempt; if none remain, the redirect page renders
+      // an empty state with a Retry button.
+      const siblings = (questionQuery.data?.sessions ?? []).filter((s) => s.id !== id);
+      const byStartedDesc = (a: { startedAt: string }, b: { startedAt: string }) =>
+        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime();
+      const nextCompleted = [...siblings]
+        .filter((s) => s.status === 'completed')
+        .sort(byStartedDesc)[0];
+      const nextAny = nextCompleted ?? [...siblings].sort(byStartedDesc)[0];
+
+      if (nextAny) {
+        navigate(`/sessions/${nextAny.id}`);
+      } else {
+        navigate(questionId ? `/questions/${questionId}` : '/');
+      }
+
+      // Order matters: navigate first so this page unmounts before the
+      // cache cleanup triggers a refetch on the now-gone id (which would
+      // 404 and flash the error UI on the still-mounted page).
       queryClient.removeQueries({ queryKey: ['session', id] });
       queryClient.removeQueries({ queryKey: ['evals', id] });
       queryClient.removeQueries({ queryKey: ['snapshot', id] });
