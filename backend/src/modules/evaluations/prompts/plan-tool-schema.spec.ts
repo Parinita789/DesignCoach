@@ -112,20 +112,33 @@ describe('buildPlanEvalTool', () => {
     expect(result.enum).toEqual(['hit', 'partial', 'miss', 'cannot_evaluate']);
   });
 
-  it('top-level requires signals, feedback, top_actions', () => {
+  it('top-level requires signals, feedback, top_actions, gap_topics', () => {
     const tool = buildPlanEvalTool(rubric([signal('a')]));
     const schema = tool.inputSchema as Record<string, unknown>;
-    expect(schema.required).toEqual(['signals', 'feedback', 'top_actions']);
+    expect(schema.required).toEqual(['signals', 'feedback', 'top_actions', 'gap_topics']);
+  });
+
+  it('gap_topics is bounded and points at the gap_topic def', () => {
+    const tool = buildPlanEvalTool(rubric([signal('a')]));
+    const schema = tool.inputSchema as Record<string, unknown>;
+    const props = schema.properties as Record<string, unknown>;
+    const gap = props.gap_topics as Record<string, unknown>;
+    expect(gap.type).toBe('array');
+    expect(gap.maxItems).toBe(5);
+    expect(gap.items).toEqual({ $ref: '#/$defs/gap_topic' });
+    const defs = schema.$defs as Record<string, unknown>;
+    expect(defs.gap_topic).toBeDefined();
   });
 
   it('schema size scales with signal count (refs, not inlined copies)', () => {
     // 25 signals with $ref should be much smaller than the same with inlined sub-schemas.
     // The sub-schema serializes to ~400 chars, so 25 inlined copies add ~10KB.
-    // Each $ref is ~28 chars; 25 refs add ~700 chars. The bulk of bytes should be the
-    // single $defs/signal entry, not the per-signal properties.
+    // Each $ref is ~28 chars; 25 refs add ~700 chars. Plus the canonical
+    // topics enum lives in $defs.gap_topic — that's a fixed ~1.5KB cost
+    // independent of signal count.
     const ids = Array.from({ length: 25 }, (_, i) => `s${i}`);
     const tool = buildPlanEvalTool(rubric(ids.map((id) => signal(id))));
     const serialized = JSON.stringify(tool.inputSchema);
-    expect(serialized.length).toBeLessThan(2500);
+    expect(serialized.length).toBeLessThan(4000);
   });
 });

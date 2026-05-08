@@ -27,6 +27,7 @@ function makeResult(phase: 'plan' | 'build'): PhaseEvaluationResult {
     signalResults: {},
     feedbackText: 'fb',
     topActionableItems: [],
+    gapTopics: [],
     audit: {
       prompt: 'p',
       rawResponse: 'r',

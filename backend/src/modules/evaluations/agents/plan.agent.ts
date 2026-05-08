@@ -120,6 +120,12 @@ export class PlanAgent extends BasePhaseAgent {
           `not in rubric: ${parsed.droppedSignalIds.join(', ')}`,
       );
     }
+    if (parsed.droppedTopicNames && parsed.droppedTopicNames.length > 0) {
+      this.logger.warn(
+        `Dropped ${parsed.droppedTopicNames.length} gap_topic name(s) outside ` +
+          `the canonical vocabulary: ${parsed.droppedTopicNames.join(', ')}`,
+      );
+    }
 
     const validated = validateEvidence(parsed.signals, input.planMd, input.hints);
     if (validated.downgraded.length > 0) {
@@ -152,6 +158,7 @@ export class PlanAgent extends BasePhaseAgent {
       signalResults: workingSignals,
       feedbackText: parsed.feedback,
       topActionableItems: parsed.topActions,
+      gapTopics: parsed.gapTopics,
       audit: {
         prompt: renderedPrompt,
         rawResponse: auditResponse,

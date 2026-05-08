@@ -8,7 +8,7 @@ import { evaluationsService } from '@/services/evaluations.service';
 import { rubricsService } from '@/services/rubrics.service';
 import { useSessionStore } from '@/store/sessionStore';
 import { ScoreBreakdown } from '@/components/ScoreBreakdown';
-import { EvaluationAudit, PhaseEvaluation, SignalResult } from '@/types/evaluation';
+import { EvaluationAudit, GapTopic, PhaseEvaluation, SignalResult } from '@/types/evaluation';
 import { Rubric, RubricSignal, WeightTier } from '@/types/rubric';
 import { QuestionWithSessions, SENIORITIES, Seniority } from '@/types/question';
 import { computeCostUsd, formatCostUsd, formatLatency } from '@/lib/llm-cost';
@@ -578,6 +578,10 @@ function PlanEvaluationView({
         </section>
       )}
 
+      {evaluation.gapTopics && evaluation.gapTopics.length > 0 && (
+        <GapTopicsSection topics={evaluation.gapTopics} />
+      )}
+
       {!rubric ? (
         <section>
           <h3 className="text-xs font-medium text-gray-700 uppercase tracking-wide mb-2">
@@ -640,6 +644,54 @@ function PlanEvaluationView({
         </>
       )}
     </>
+  );
+}
+
+// Topics directly relevant to the question that the candidate either
+// missed or only lightly touched. Backend persists these per phase
+// evaluation; the future study feature aggregates them across sessions
+// to drive a "you've missed caching in 3 sessions" view.
+function GapTopicsSection({ topics }: { topics: GapTopic[] }) {
+  // Render canonical snake_case names as title case so they read as
+  // human topics ("cache_aside" -> "Cache aside") without baking a
+  // separate display label into the type.
+  const humanize = (name: string) =>
+    name
+      .split('_')
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(' ');
+  return (
+    <section>
+      <h3 className="text-xs font-medium text-gray-700 uppercase tracking-wide mb-1">
+        Topics to study
+      </h3>
+      <p className="text-[11px] text-gray-500 mb-2">
+        Topics this question expected that you either missed or only
+        lightly touched. The future study feature aggregates these
+        across sessions.
+      </p>
+      <ul className="rounded border border-gray-300 bg-white divide-y divide-gray-100 text-sm">
+        {topics.map((t, i) => {
+          const tag =
+            t.coverage === 'missed'
+              ? { label: 'MISSED', cls: 'bg-rose-100 text-rose-800 border-rose-300' }
+              : { label: 'LIGHT', cls: 'bg-amber-100 text-amber-800 border-amber-300' };
+          return (
+            <li key={`${t.name}-${i}`} className="px-3 py-2 flex items-start gap-3">
+              <span
+                className={`shrink-0 inline-block rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tag.cls}`}
+              >
+                {tag.label}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="font-medium text-gray-900">{humanize(t.name)}</div>
+                <div className="text-xs text-gray-600 mt-0.5">{t.whyExpected}</div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

@@ -106,6 +106,12 @@ export class BuildAgent extends BasePhaseAgent {
           `not in build rubric: ${parsed.droppedSignalIds.join(', ')}`,
       );
     }
+    if (parsed.droppedTopicNames && parsed.droppedTopicNames.length > 0) {
+      this.logger.warn(
+        `Dropped ${parsed.droppedTopicNames.length} gap_topic name(s) outside ` +
+          `the canonical vocabulary: ${parsed.droppedTopicNames.join(', ')}`,
+      );
+    }
 
     // The rendered user message includes the per-file timeline, build
     // summary, tree paths, and key snippets exactly as the LLM saw them.
@@ -145,6 +151,7 @@ export class BuildAgent extends BasePhaseAgent {
       signalResults: workingSignals,
       feedbackText: parsed.feedback,
       topActionableItems: parsed.topActions,
+      gapTopics: parsed.gapTopics,
       audit: {
         prompt: renderedPrompt,
         rawResponse: auditResponse,

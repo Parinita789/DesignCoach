@@ -1,7 +1,12 @@
-import { SignalResult } from '../types/evaluation.types';
+import { GapTopic, SignalResult } from '../types/evaluation.types';
 import { EvaluationParseError, ParsedEvalOutput } from './parse-eval-output';
+import { isCanonicalTopic } from '../helpers/canonical-topics';
 
 const VALID_RESULTS = new Set(['hit', 'miss', 'partial', 'cannot_evaluate']);
+const VALID_GAP_COVERAGES = new Set<GapTopic['coverage']>([
+  'missed',
+  'lightly_touched',
+]);
 
 export function validateEvalToolArgs(
   rawArgs: unknown,
@@ -71,7 +76,58 @@ export function validateEvalToolArgs(
     topActions.push(item);
   }
 
-  return { score: 0, signals, feedback: obj.feedback, topActions };
+  const gapTopicsRaw = (obj.gap_topics ?? obj.gapTopics) as unknown;
+  const gapTopics: GapTopic[] = [];
+  const droppedTopicNames: string[] = [];
+  if (gapTopicsRaw !== undefined && gapTopicsRaw !== null) {
+    if (!Array.isArray(gapTopicsRaw)) {
+      throw new EvaluationParseError('Tool args "gap_topics" must be an array', rawText);
+    }
+    for (const item of gapTopicsRaw) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new EvaluationParseError('"gap_topics" entries must be objects', rawText);
+      }
+      const t = item as Record<string, unknown>;
+      if (typeof t.name !== 'string') {
+        throw new EvaluationParseError('gap_topic.name must be a string', rawText);
+      }
+      // Out-of-canonical names get dropped with a warn rather than
+      // throwing — even with the tool schema's enum the LLM occasionally
+      // returns a near-paraphrase the validator rejects, and we'd
+      // rather lose one topic than the whole eval.
+      if (!isCanonicalTopic(t.name)) {
+        droppedTopicNames.push(t.name);
+        continue;
+      }
+      if (
+        typeof t.coverage !== 'string' ||
+        !VALID_GAP_COVERAGES.has(t.coverage as GapTopic['coverage'])
+      ) {
+        throw new EvaluationParseError(
+          `gap_topic.coverage must be one of ${[...VALID_GAP_COVERAGES].join('|')}`,
+          rawText,
+        );
+      }
+      const whyExpected = (t.why_expected ?? t.whyExpected) as unknown;
+      if (typeof whyExpected !== 'string') {
+        throw new EvaluationParseError('gap_topic.why_expected must be a string', rawText);
+      }
+      gapTopics.push({
+        name: t.name,
+        coverage: t.coverage as GapTopic['coverage'],
+        whyExpected,
+      });
+    }
+  }
+
+  return {
+    score: 0,
+    signals,
+    feedback: obj.feedback,
+    topActions,
+    gapTopics,
+    droppedTopicNames,
+  };
 }
 
 function safeStringify(v: unknown): string {

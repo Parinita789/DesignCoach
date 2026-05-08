@@ -153,6 +153,10 @@ model PhaseEvaluation {
   signalResults       Json     @map("signal_results")
   feedbackText        String   @map("feedback_text")
   topActionableItems  Json     @map("top_actionable_items")
+  // Topics directly relevant to the question that the candidate either
+  // missed or only lightly touched — input to the future study feature
+  // that aggregates gaps across sessions. Empty array on legacy rows.
+  gapTopics           Json     @default("[]") @map("gap_topics")
   evaluatedAt         DateTime @default(now()) @map("evaluated_at")
 
   session  Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)

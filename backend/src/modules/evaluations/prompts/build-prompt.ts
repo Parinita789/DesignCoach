@@ -184,7 +184,9 @@ For each signal, write \`reasoning\` first (a brief justification grounded in th
 
 \`feedback\` (<=3000 chars) is a SYNTHESIS — open with the variant confirmation, then explain the score in 2-4 themes (what the candidate executed well, what slipped, what to learn). Do NOT enumerate per-signal pass/fail in feedback — that's what \`signals[*].evidence\` is for.
 
-\`top_actions\` (<=5 items, each <=200 chars) must be achievable in a similar future session.`;
+\`top_actions\` (<=5 items, each <=200 chars) must be achievable in a similar future session.
+
+\`gap_topics\` (<=5 items): system-design topics directly relevant to THIS question that the candidate either MISSED in the captured implementation or only LIGHTLY TOUCHED. \`name\` must come from the schema's enum — paraphrasing is rejected. Pick a topic only when you can defend why it matters from the question, plan.md commitments, captured code, or AI conversation. Empty array is correct when nothing relevant is missing — do NOT pad. Build-side examples: a URL shortener whose code uses find-then-insert without UNIQUE constraint -> \`{name: "unique_constraint_enforcement", coverage: "missed", why_expected: "find_by_slug then insert is a TOCTOU race; the database UNIQUE constraint should enforce slug uniqueness instead of application-side checks"}\`. A click-counter incrementing inside the redirect path with no async write -> \`{name: "read_write_path_separation", coverage: "missed", why_expected: "10K RPS redirect path mutates click_count synchronously; plan.md said 100:1 read/write ratio so this should fan out to a queue"}\`.`;
   }
   return `## OUTPUT FORMAT (strict)
 Return ONLY a single valid JSON object. No prose. No markdown fences. No explanations outside the JSON.
@@ -196,6 +198,8 @@ Every signal listed above (good and bad) must appear as a key in the \`signals\`
 \`feedback\` (<=3000 chars) is a SYNTHESIS, not a per-signal enumeration.
 
 \`top_actions\` (<=5 items, each <=200 chars) must be achievable in a similar future session.
+
+\`gap_topics\` (<=5 items, each {name, coverage, why_expected}) lists system-design topics directly relevant to THIS question that the candidate missed or only lightly touched in the captured artifacts. \`name\` must come from the canonical vocabulary in the rubric outputSchema; \`coverage\` is "missed" or "lightly_touched"; \`why_expected\` cites what about the question / plan.md / captured code makes the topic expected. Empty array is fine.
 
 The JSON MUST match this schema:
 ${JSON.stringify(rubric.outputSchema, null, 2)}`;

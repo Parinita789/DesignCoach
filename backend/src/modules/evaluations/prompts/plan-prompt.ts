@@ -286,7 +286,9 @@ For each signal, write \`reasoning\` first (your brief justification), then comm
 
 \`feedback\` (≤3000 chars) is a SYNTHESIS — open with the mode classification (e.g., "Mode B (design-only): question stipulates 10K req/s and 200M URLs."), then explain the score in 2–4 themes (what the plan got right, what it missed, what the candidate should learn). Do NOT enumerate per-signal pass/fail in feedback — that's what \`signals[*].evidence\` is for.
 
-\`top_actions\` (≤5 items, each ≤200 chars) must be achievable in the same 1-hour design session. "Run a 10K req/s load test" is NOT valid; "sketch how you'd validate at demo scale" is.`;
+\`top_actions\` (≤5 items, each ≤200 chars) must be achievable in the same 1-hour design session. "Run a 10K req/s load test" is NOT valid; "sketch how you'd validate at demo scale" is.
+
+\`gap_topics\` (≤5 items): system-design topics directly relevant to THIS question that the candidate either MISSED entirely or only LIGHTLY TOUCHED in plan.md. \`name\` must come from the schema's enum — paraphrasing is rejected. Pick a topic only when you can defend why it matters for this specific question (cite the question's NFR, scale, or domain in \`why_expected\`). Empty array is correct when nothing relevant is missing — do NOT pad. Examples: a URL shortener at 10K RPS without any caching mention -> \`{name: "cache_aside", coverage: "missed", why_expected: "10K RPS read-heavy with immutable slug->target mapping makes a cache the natural read path; plan.md does not mention any cache layer"}\`. A counter API where the candidate names locking but not the isolation level -> \`{name: "transaction_isolation", coverage: "lightly_touched", why_expected: "plan.md says 'use a lock' but doesn't pick READ_COMMITTED vs SERIALIZABLE — the choice changes both correctness and contention"}\`.`;
   }
   return `## OUTPUT FORMAT (strict)
 Return ONLY a single valid JSON object. No prose. No markdown fences. No explanations outside the JSON.
@@ -296,6 +298,8 @@ Every signal listed above (both good and bad) must appear as a key in the "signa
 \`feedback\` (≤3000 chars) is a SYNTHESIS — open with the mode classification (e.g., "Mode B (design-only): question stipulates 10K req/s and 200M URLs."), then explain the score in 2–4 themes (what the plan got right, what it missed, what the candidate should learn). Do NOT enumerate per-signal pass/fail in feedback — that's what \`signals[*].evidence\` is for.
 
 \`top_actions\` (≤5 items, each ≤200 chars) must be achievable in the same 1-hour design session. "Run a 10K req/s load test" is NOT valid; "sketch how you'd validate at demo scale" is.
+
+\`gap_topics\` (≤5 items, each {name, coverage, why_expected}) lists system-design topics directly relevant to THIS question that the candidate missed or only lightly touched. \`name\` must come from the canonical vocabulary in the rubric outputSchema; \`coverage\` is "missed" or "lightly_touched"; \`why_expected\` cites what about THIS question makes the topic expected. Empty array is fine.
 
 The JSON MUST match this schema:
 ${JSON.stringify(rubric.outputSchema, null, 2)}`;

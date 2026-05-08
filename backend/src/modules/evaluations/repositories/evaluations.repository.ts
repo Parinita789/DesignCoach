@@ -17,6 +17,7 @@ export class EvaluationsRepository {
         signalResults: result.signalResults as unknown as Prisma.InputJsonValue,
         feedbackText: result.feedbackText,
         topActionableItems: result.topActionableItems as unknown as Prisma.InputJsonValue,
+        gapTopics: result.gapTopics as unknown as Prisma.InputJsonValue,
       },
     });
   }

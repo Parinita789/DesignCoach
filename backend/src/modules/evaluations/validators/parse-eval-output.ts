@@ -1,4 +1,5 @@
-import { SignalResult } from '../types/evaluation.types';
+import { GapTopic, SignalResult } from '../types/evaluation.types';
+import { isCanonicalTopic } from '../helpers/canonical-topics';
 
 export class EvaluationParseError extends Error {
   constructor(message: string, public readonly rawText: string) {
@@ -12,8 +13,15 @@ export interface ParsedEvalOutput {
   signals: Record<string, SignalResult>;
   feedback: string;
   topActions: string[];
+  gapTopics: GapTopic[];
   droppedSignalIds?: string[];
+  droppedTopicNames?: string[];
 }
+
+const VALID_GAP_COVERAGES = new Set<GapTopic['coverage']>([
+  'missed',
+  'lightly_touched',
+]);
 
 const VALID_RESULTS = new Set(['hit', 'miss', 'partial', 'cannot_evaluate']);
 
@@ -148,5 +156,61 @@ export function parseEvalOutput(
     topActions.push(item);
   }
 
-  return { score, signals, feedback, topActions, droppedSignalIds };
+  const gapResult = extractGapTopics(obj, rawText);
+
+  return {
+    score,
+    signals,
+    feedback,
+    topActions,
+    gapTopics: gapResult.topics,
+    droppedSignalIds,
+    droppedTopicNames: gapResult.dropped,
+  };
+}
+
+// gap_topics is optional on the wire (some old prompts won't return it)
+// and on the no-tools text path we tolerate missing/empty arrays.
+// Out-of-canonical names are dropped with a warn rather than throwing —
+// mirrors the signal-id drop behavior.
+function extractGapTopics(
+  obj: Record<string, unknown>,
+  rawText: string,
+): { topics: GapTopic[]; dropped: string[] } {
+  const raw = (obj.gap_topics ?? obj.gapTopics) as unknown;
+  if (raw === undefined || raw === null) return { topics: [], dropped: [] };
+  if (!Array.isArray(raw)) {
+    throw new EvaluationParseError('"gap_topics" must be an array', rawText);
+  }
+  const topics: GapTopic[] = [];
+  const dropped: string[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new EvaluationParseError('"gap_topics" entries must be objects', rawText);
+    }
+    const t = item as Record<string, unknown>;
+    if (typeof t.name !== 'string') {
+      throw new EvaluationParseError('gap_topic.name must be a string', rawText);
+    }
+    if (!isCanonicalTopic(t.name)) {
+      dropped.push(t.name);
+      continue;
+    }
+    if (typeof t.coverage !== 'string' || !VALID_GAP_COVERAGES.has(t.coverage as GapTopic['coverage'])) {
+      throw new EvaluationParseError(
+        `gap_topic.coverage must be one of ${[...VALID_GAP_COVERAGES].join('|')}`,
+        rawText,
+      );
+    }
+    const whyExpected = (t.why_expected ?? t.whyExpected) as unknown;
+    if (typeof whyExpected !== 'string') {
+      throw new EvaluationParseError('gap_topic.why_expected must be a string', rawText);
+    }
+    topics.push({
+      name: t.name,
+      coverage: t.coverage as GapTopic['coverage'],
+      whyExpected,
+    });
+  }
+  return { topics, dropped };
 }

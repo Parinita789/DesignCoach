@@ -14,9 +14,9 @@ goal: |
 
 time_bounds:
   target_min_minutes: 0
-  target_max_minutes: 25
+  target_max_minutes: 50
   flag_under_minutes: 0
-  flag_over_minutes: 30
+  flag_over_minutes: 60
   note: |
     Design-mode sessions often have empty build phases. That's
     expected — there is no follow-up build against the design plan in

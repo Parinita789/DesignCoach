@@ -100,9 +100,21 @@ describe('buildBuildEvalTool', () => {
     expect(result.enum).toEqual(['hit', 'partial', 'miss', 'cannot_evaluate']);
   });
 
-  it('top-level requires signals, feedback, top_actions', () => {
+  it('top-level requires signals, feedback, top_actions, gap_topics', () => {
     const tool = buildBuildEvalTool(rubric([signal('a')]));
     const schema = tool.inputSchema as Record<string, unknown>;
-    expect(schema.required).toEqual(['signals', 'feedback', 'top_actions']);
+    expect(schema.required).toEqual(['signals', 'feedback', 'top_actions', 'gap_topics']);
+  });
+
+  it('gap_topics is bounded and points at the gap_topic def', () => {
+    const tool = buildBuildEvalTool(rubric([signal('a')]));
+    const schema = tool.inputSchema as Record<string, unknown>;
+    const props = schema.properties as Record<string, unknown>;
+    const gap = props.gap_topics as Record<string, unknown>;
+    expect(gap.type).toBe('array');
+    expect(gap.maxItems).toBe(5);
+    expect(gap.items).toEqual({ $ref: '#/$defs/gap_topic' });
+    const defs = schema.$defs as Record<string, unknown>;
+    expect(defs.gap_topic).toBeDefined();
   });
 });

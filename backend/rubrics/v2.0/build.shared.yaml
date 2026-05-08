@@ -260,7 +260,7 @@ scoring:
 
 output_schema:
   type: object
-  required: [score, signals, feedback, top_actions]
+  required: [score, signals, feedback, top_actions, gap_topics]
   additionalProperties: false
   properties:
     score:
@@ -290,6 +290,24 @@ output_schema:
       items:
         type: string
         maxLength: 200
+    gap_topics:
+      type: array
+      maxItems: 5
+      description: "System-design topics directly relevant to THIS question that the candidate missed or only lightly touched in the captured artifacts. Empty array is correct when nothing is missing."
+      items:
+        type: object
+        required: [name, coverage, why_expected]
+        additionalProperties: false
+        properties:
+          name:
+            type: string
+            description: "From the canonical topics vocabulary (cache_aside, sharding, idempotency, capacity_estimation, row_level_locking, leader_follower_replication, etc.)."
+          coverage:
+            enum: [missed, lightly_touched]
+          why_expected:
+            type: string
+            maxLength: 400
+            description: "1-2 sentences citing what about THIS question / plan.md / captured code makes the topic expected."
     bad_signals_fired:
       type: array
       description: "Ids of bad signals (polarity=bad) that fired."

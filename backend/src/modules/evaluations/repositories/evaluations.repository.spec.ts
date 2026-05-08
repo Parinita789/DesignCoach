@@ -24,6 +24,13 @@ describe('EvaluationsRepository', () => {
     signalResults: { sig_a: { result: 'hit', evidence: 'because reasons' } },
     feedbackText: 'good plan',
     topActionableItems: ['add capacity numbers'],
+    gapTopics: [
+      {
+        name: 'capacity_estimation',
+        coverage: 'missed' as const,
+        whyExpected: '10K RPS NFR but plan.md has no back-of-envelope numbers',
+      },
+    ],
     audit: {
       prompt: '<rendered prompt>',
       rawResponse: '{"score": 4.25}',
@@ -50,6 +57,7 @@ describe('EvaluationsRepository', () => {
           signalResults: sampleResult.signalResults,
           feedbackText: 'good plan',
           topActionableItems: sampleResult.topActionableItems,
+          gapTopics: sampleResult.gapTopics,
         },
       });
     });
