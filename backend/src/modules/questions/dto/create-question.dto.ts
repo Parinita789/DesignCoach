@@ -1,5 +1,10 @@
 import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
-import { QuestionKind, Seniority } from '../../evaluations/types/rubric.types';
+import {
+  QUESTION_KINDS,
+  QuestionKind,
+  SENIORITIES,
+  Seniority,
+} from '../../evaluations/types/rubric.types';
 
 export class CreateQuestionDto {
   @IsString()
@@ -7,16 +12,16 @@ export class CreateQuestionDto {
   prompt!: string;
 
   @IsOptional()
-  @IsIn(['traditional_design', 'agentic_design', 'agentic_build'])
+  @IsIn(QUESTION_KINDS as readonly string[])
   kind?: QuestionKind;
 
   @IsOptional()
-  @IsIn(['junior', 'mid', 'senior', 'staff'])
+  @IsIn(SENIORITIES as readonly string[])
   seniority?: Seniority;
 }
 
 export class StartAttemptDto {
   @IsOptional()
-  @IsIn(['junior', 'mid', 'senior', 'staff'])
+  @IsIn(SENIORITIES as readonly string[])
   seniority?: Seniority;
 }

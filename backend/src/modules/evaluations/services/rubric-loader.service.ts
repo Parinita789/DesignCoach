@@ -415,8 +415,13 @@ function parseYaml<T>(raw: string, filePath: string): T {
 
 function applySeniority(rubric: Rubric, seniority: Seniority | undefined): Rubric {
   const signals: RubricSignal[] = rubric.signals.map((s) => {
-    const resolvedWeight =
-      seniority && s.weightBySeniority ? s.weightBySeniority[seniority] : s.weight;
+    // Fall back to the default weight for any seniority not present in
+    // the per-signal map. Without this, a typo'd or future seniority
+    // value would silently produce `weight: undefined` and corrupt the
+    // rubric downstream — score-computer would treat the signal as
+    // missing weight class.
+    const senioritySpecific = seniority && s.weightBySeniority?.[seniority];
+    const resolvedWeight = senioritySpecific ?? s.weight;
     const { weightBySeniority: _drop, ...rest } = s;
     return { ...rest, weight: resolvedWeight };
   });
