@@ -173,17 +173,38 @@ function buildToolFenceInstruction(tool: { name: string; inputSchema: Record<str
   ].join('\n');
 }
 
-function parseFencedJson(text: string): Record<string, unknown> | undefined {
-  const match = text.match(/<json>([\s\S]*?)<\/json>/i);
-  const body = match ? match[1] : text;
-  try {
-    const parsed = JSON.parse(body.trim()) as unknown;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
+// Recover JSON from any of the wrappers Claude is likely to emit:
+//   <json>...</json>
+//   ```json\n...\n```
+//   ```\n...\n```
+//   bare JSON object as the whole body
+// Returns undefined on parse failure; caller treats that as
+// "no tool_input emitted" and either retries or surfaces the error.
+export function parseFencedJson(text: string): Record<string, unknown> | undefined {
+  const candidates: string[] = [];
+
+  const xmlFence = text.match(/<json>([\s\S]*?)<\/json>/i);
+  if (xmlFence) candidates.push(xmlFence[1]);
+
+  const jsonFence = text.match(/```json\s*\n?([\s\S]*?)\n?```/i);
+  if (jsonFence) candidates.push(jsonFence[1]);
+
+  const anyFence = text.match(/```\s*\n?([\s\S]*?)\n?```/);
+  if (anyFence) candidates.push(anyFence[1]);
+
+  // Last resort: try the whole body. Useful when the model just
+  // returns the bare JSON object with no wrapper.
+  candidates.push(text);
+
+  for (const body of candidates) {
+    try {
+      const parsed = JSON.parse(body.trim()) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Try the next candidate.
     }
-  } catch {
-    // Fall through — caller will see toolInput undefined and can
-    // either retry or surface a parse error.
   }
   return undefined;
 }
