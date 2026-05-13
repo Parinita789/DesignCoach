@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { QuestionsService } from '../services/questions.service';
 import { CreateQuestionDto, StartAttemptDto } from '../dto/create-question.dto';
+import { PaginationQueryDto, toPrismaPagination } from '../../../common/pagination/pagination';
 
 @ApiTags('questions')
 @Controller('questions')
@@ -19,9 +20,14 @@ export class QuestionsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List every question with its sessions + scores' })
-  list() {
-    return this.questionsService.list();
+  @ApiOperation({
+    summary: 'List questions with sessions + scores, newest first',
+    description: `Paginated. Defaults: page=1, limit=50. Max limit=200.`,
+  })
+  @ApiQuery({ name: 'page', type: Number, required: false })
+  @ApiQuery({ name: 'limit', type: Number, required: false })
+  list(@Query() pagination: PaginationQueryDto) {
+    return this.questionsService.list(toPrismaPagination(pagination));
   }
 
   @Get(':id')

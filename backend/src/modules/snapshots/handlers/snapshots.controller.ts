@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { SnapshotsService } from '../services/snapshots.service';
 import { CaptureSnapshotDto } from '../dto/capture-snapshot.dto';
+import { PaginationQueryDto, toPrismaPagination } from '../../../common/pagination/pagination';
 
 @ApiTags('snapshots')
 @Controller('sessions/:sessionId/snapshots')
@@ -28,8 +29,16 @@ export class SnapshotsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List every snapshot for a session, newest first' })
-  list(@Param('sessionId') sessionId: string) {
-    return this.snapshotsService.list(sessionId);
+  @ApiOperation({
+    summary: 'List snapshots for a session, newest first',
+    description: `Paginated. Defaults: page=1, limit=50. Max limit=200.`,
+  })
+  @ApiQuery({ name: 'page', type: Number, required: false })
+  @ApiQuery({ name: 'limit', type: Number, required: false })
+  list(
+    @Param('sessionId') sessionId: string,
+    @Query() pagination: PaginationQueryDto,
+  ) {
+    return this.snapshotsService.list(sessionId, toPrismaPagination(pagination));
   }
 }

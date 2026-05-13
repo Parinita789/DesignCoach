@@ -36,8 +36,12 @@ export class SessionsRepository {
     return stripHash(row);
   }
 
-  async findAll() {
-    const rows = await this.prisma.session.findMany({ orderBy: { startedAt: 'desc' } });
+  async findAll(opts: { take?: number; skip?: number } = {}) {
+    const rows = await this.prisma.session.findMany({
+      orderBy: { startedAt: 'desc' },
+      take: opts.take,
+      skip: opts.skip,
+    });
     return rows.map((r) => stripHash(r));
   }
 

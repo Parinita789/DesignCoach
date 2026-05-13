@@ -15,10 +15,12 @@ export class SnapshotsRepository {
     return this.prisma.snapshot.create({ data });
   }
 
-  findBySession(sessionId: string) {
+  findBySession(sessionId: string, opts: { take?: number; skip?: number } = {}) {
     return this.prisma.snapshot.findMany({
       where: { sessionId },
       orderBy: { takenAt: 'desc' },
+      take: opts.take,
+      skip: opts.skip,
     });
   }
 

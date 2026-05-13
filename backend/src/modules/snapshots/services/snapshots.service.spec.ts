@@ -52,7 +52,7 @@ describe('SnapshotsService', () => {
     it('delegates to repo.findBySession', async () => {
       repo.findBySession.mockResolvedValue([{ id: 'a' }]);
       expect(await service.list('sid-1')).toEqual([{ id: 'a' }]);
-      expect(repo.findBySession).toHaveBeenCalledWith('sid-1');
+      expect(repo.findBySession).toHaveBeenCalledWith('sid-1', undefined);
     });
   });
 

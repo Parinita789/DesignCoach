@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { SessionsService } from '../services/sessions.service';
 import { EndSessionDto } from '../dto/end-session.dto';
+import { PaginationQueryDto, toPrismaPagination } from '../../../common/pagination/pagination';
 
 @ApiTags('sessions')
 @Controller('sessions')
@@ -25,9 +26,14 @@ export class SessionsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List every session, newest first' })
-  list() {
-    return this.sessionsService.list();
+  @ApiOperation({
+    summary: 'List sessions, newest first',
+    description: `Paginated. Defaults: page=1, limit=50. Max limit=200.`,
+  })
+  @ApiQuery({ name: 'page', type: Number, required: false })
+  @ApiQuery({ name: 'limit', type: Number, required: false })
+  list(@Query() pagination: PaginationQueryDto) {
+    return this.sessionsService.list(toPrismaPagination(pagination));
   }
 
   @Delete(':id')

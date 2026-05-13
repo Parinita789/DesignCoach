@@ -10,9 +10,11 @@ export class QuestionsRepository {
     return this.prisma.question.create({ data });
   }
 
-  async findAll() {
+  async findAll(opts: { take?: number; skip?: number } = {}) {
     const rows = await this.prisma.question.findMany({
       orderBy: { createdAt: 'desc' },
+      take: opts.take,
+      skip: opts.skip,
       include: {
         sessions: {
           include: {

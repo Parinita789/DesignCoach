@@ -23,8 +23,8 @@ export class SnapshotsService {
     });
   }
 
-  list(sessionId: string) {
-    return this.snapshotsRepository.findBySession(sessionId);
+  list(sessionId: string, pagination?: { take?: number; skip?: number }) {
+    return this.snapshotsRepository.findBySession(sessionId, pagination);
   }
 
   latest(sessionId: string) {

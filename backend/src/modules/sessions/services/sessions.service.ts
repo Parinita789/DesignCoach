@@ -40,8 +40,8 @@ export class SessionsService {
     return session;
   }
 
-  list() {
-    return this.sessionsRepository.findAll();
+  list(pagination?: { take?: number; skip?: number }) {
+    return this.sessionsRepository.findAll(pagination);
   }
 
   async end(sessionId: string, dto: EndSessionDto): Promise<EndSessionResult> {

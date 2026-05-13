@@ -39,8 +39,8 @@ export class QuestionsService {
     return { question, session };
   }
 
-  list() {
-    return this.questionsRepository.findAll();
+  list(pagination?: { take?: number; skip?: number }) {
+    return this.questionsRepository.findAll(pagination);
   }
 
   async get(questionId: string) {
