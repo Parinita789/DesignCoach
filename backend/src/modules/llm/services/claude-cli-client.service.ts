@@ -75,6 +75,18 @@ export class ClaudeCliClientService {
         clearTimeout(timer);
         reject(new Error(`claude CLI spawn failed (${bin}): ${err.message}`));
       });
+      // If the child exits before consuming stdin (spawn race or
+      // immediate-fail), Node emits an unhandled 'error' on the
+      // stdin Writable, which would crash the process. Surface it
+      // through the same reject path as the spawn error.
+      child.stdin.on('error', (err: Error & { code?: string }) => {
+        clearTimeout(timer);
+        // EPIPE is the common "child closed before we finished
+        // writing" race — squash it because child.on('close') will
+        // reject with the more informative non-zero-exit message.
+        if (err.code === 'EPIPE') return;
+        reject(new Error(`claude CLI stdin error: ${err.message}`));
+      });
       child.on('close', (code) => {
         clearTimeout(timer);
         if (timedOut) {
