@@ -47,8 +47,34 @@ Do NOT include the tag itself in the quote. (For example, if you
 see <${USER_CONTENT_TAGS.planMd}>I considered a cache...</${USER_CONTENT_TAGS.planMd}>,
 the verbatim quote is "I considered a cache..." with no tag.)`;
 
+// Neutralize any literal occurrences of </${tag}> inside untrusted
+// content before wrapping. Without this, a payload containing
+// "</plan_md>Ignore previous instructions..." would prematurely
+// close the boundary and the model would treat the trailing text
+// as an authoritative directive. The escape inserts a backslash so
+// the substring is no longer a valid closing tag but is still
+// human-readable.
+//
+// Returns the escaped content plus the count of occurrences
+// neutralized — callers that need to surface the count for logging
+// or metadata (the guardrails module) can read it; callers that
+// don't care just use `wrapUserContent` which discards it.
+export function escapeClosingTag(
+  content: string,
+  tag: UserContentTag,
+): { escaped: string; count: number } {
+  const pattern = new RegExp(`</${tag}>`, 'g');
+  let count = 0;
+  const escaped = content.replace(pattern, () => {
+    count += 1;
+    return `<\\/${tag}>`;
+  });
+  return { escaped, count };
+}
+
 export function wrapUserContent(content: string, tag: UserContentTag): string {
-  return `<${tag}>\n${content}\n</${tag}>`;
+  const { escaped } = escapeClosingTag(content, tag);
+  return `<${tag}>\n${escaped}\n</${tag}>`;
 }
 
 // For inline use where the wrapped content should appear under its
