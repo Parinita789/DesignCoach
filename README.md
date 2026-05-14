@@ -54,6 +54,13 @@ under cost, retries, and partial failure.
 - **Static API call-flow extractor** that walks every controller
   with `ts-morph`, resolves `this.X.Y(...)` via DI constructor
   types, traces to Prisma + external boundaries.
+- **Input guardrails module.** Three preset configs (plan / hint /
+  question) bound user input by size, trim, and escape literal
+  closing-tag injection (`</plan_md>`) before content reaches an
+  LLM prompt. Typed `GuardrailRejectedError` flows through NestJS's
+  exception filter to a structured HTTP 400 — the frontend reads a
+  stable `code` field, and the rejected content never enters a
+  log line by construction.
 
 ---
 
