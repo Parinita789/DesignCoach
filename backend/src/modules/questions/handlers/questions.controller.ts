@@ -3,11 +3,16 @@ import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { QuestionsService } from '../services/questions.service';
 import { CreateQuestionDto, StartAttemptDto } from '../dto/create-question.dto';
 import { PaginationQueryDto, toPrismaPagination } from '../../../common/pagination/pagination';
+import { GuardrailsService } from '../../guardrails/services/guardrails.service';
+import { GUARDRAIL_PRESETS } from '../../guardrails/presets';
 
 @ApiTags('questions')
 @Controller('questions')
 export class QuestionsController {
-  constructor(private readonly questionsService: QuestionsService) {}
+  constructor(
+    private readonly questionsService: QuestionsService,
+    private readonly guardrails: GuardrailsService,
+  ) {}
 
   @Post()
   @ApiOperation({
@@ -16,7 +21,11 @@ export class QuestionsController {
       'Persists a new question prompt and immediately starts the candidate\'s first session against it. Returns both rows.',
   })
   create(@Body() dto: CreateQuestionDto) {
-    return this.questionsService.create(dto);
+    // Guard the prompt before persistence + LLM use. Sanitized
+    // form replaces the raw prompt; service sees the cleaned
+    // value. Throws GuardrailRejectedError → HTTP 400.
+    const { sanitized } = this.guardrails.guard(dto.prompt, GUARDRAIL_PRESETS.question);
+    return this.questionsService.create({ ...dto, prompt: sanitized });
   }
 
   @Get()

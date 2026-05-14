@@ -5,9 +5,10 @@ import { AIInteractionsRepository } from './repositories/ai-interactions.reposit
 import { SessionsModule } from '../sessions/sessions.module';
 import { SnapshotsModule } from '../snapshots/snapshots.module';
 import { LlmModule } from '../llm/llm.module';
+import { GuardrailsModule } from '../guardrails/guardrails.module';
 
 @Module({
-  imports: [forwardRef(() => SessionsModule), SnapshotsModule, LlmModule],
+  imports: [forwardRef(() => SessionsModule), SnapshotsModule, LlmModule, GuardrailsModule],
   controllers: [HintsController],
   providers: [HintsService, AIInteractionsRepository],
   exports: [AIInteractionsRepository],

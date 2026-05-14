@@ -3,11 +3,16 @@ import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { SnapshotsService } from '../services/snapshots.service';
 import { CaptureSnapshotDto } from '../dto/capture-snapshot.dto';
 import { PaginationQueryDto, toPrismaPagination } from '../../../common/pagination/pagination';
+import { GuardrailsService } from '../../guardrails/services/guardrails.service';
+import { GUARDRAIL_PRESETS } from '../../guardrails/presets';
 
 @ApiTags('snapshots')
 @Controller('sessions/:sessionId/snapshots')
 export class SnapshotsController {
-  constructor(private readonly snapshotsService: SnapshotsService) {}
+  constructor(
+    private readonly snapshotsService: SnapshotsService,
+    private readonly guardrails: GuardrailsService,
+  ) {}
 
   @Post()
   @ApiOperation({
@@ -16,7 +21,20 @@ export class SnapshotsController {
       'Inserts a new snapshot row. Called on autosave, manual save, end-of-session flush, and beforeunload (sendBeacon).',
   })
   capture(@Param('sessionId', ParseUUIDPipe) sessionId: string, @Body() dto: CaptureSnapshotDto) {
-    return this.snapshotsService.capture(sessionId, dto);
+    // Only guard when planMd is actually supplied. Null/undefined
+    // (no plan content this snapshot) flows through unchanged so
+    // empty-state snapshots from autosave still persist. Internal
+    // service-to-service calls (questions.startAttempt seeding an
+    // inherited plan) bypass this controller entirely.
+    const planMd = dto.artifacts?.planMd;
+    if (planMd == null) {
+      return this.snapshotsService.capture(sessionId, dto);
+    }
+    const { sanitized } = this.guardrails.guard(planMd, GUARDRAIL_PRESETS.plan);
+    return this.snapshotsService.capture(sessionId, {
+      ...dto,
+      artifacts: { ...dto.artifacts, planMd: sanitized },
+    });
   }
 
   @Get('latest')
