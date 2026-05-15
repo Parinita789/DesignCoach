@@ -15,3 +15,7 @@
 *.swp
 .vscode/
 .idea/
+
+# Local working planning docs — edit freely, not for version control.
+production-hardening.md
+gaps.md
