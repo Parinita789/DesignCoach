@@ -48,7 +48,7 @@ describe('EvaluationsRepository', () => {
     it('inserts a row scoped to (sessionId, phase) without audit fields', async () => {
       phaseEvaluation.create.mockResolvedValue({ id: 'eid-1' });
 
-      await repo.createPhaseEvaluation('sid-1', 'plan', sampleResult);
+      await repo.createPhaseEvaluation('sid-1', 'plan', sampleResult, 'fp-abc');
 
       expect(phaseEvaluation.create).toHaveBeenCalledWith({
         data: {
@@ -59,6 +59,7 @@ describe('EvaluationsRepository', () => {
           feedbackText: 'good plan',
           topActionableItems: sampleResult.topActionableItems,
           gapTopics: sampleResult.gapTopics,
+          inputFingerprint: 'fp-abc',
         },
       });
     });

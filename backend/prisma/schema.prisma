@@ -167,6 +167,15 @@ model PhaseEvaluation {
   gapTopics           Json     @default("[]") @map("gap_topics")
   evaluatedAt         DateTime @default(now()) @map("evaluated_at")
 
+  // SHA-256 hex of the inputs that materially affect this eval
+  // (plan.md content + model + build artifacts for build phase). When a
+  // user re-evaluates and nothing material has changed, the existing
+  // row is returned instead of paying for a fresh LLM run. Nullable
+  // so pre-migration rows survive without backfill; they simply never
+  // cache-hit and the next re-evaluate writes a row with a real
+  // fingerprint.
+  inputFingerprint    String?  @map("input_fingerprint") @db.Char(64)
+
   session  Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   audit         EvaluationAudit?
   mentor        MentorArtifact?
@@ -176,6 +185,12 @@ model PhaseEvaluation {
   // Ordered index makes "latest plan eval for session X" a single seek.
   @@index([sessionId, phase, evaluatedAt(sort: Desc)])
   @@index([signalResults], type: Gin)
+  // Fingerprint uniqueness + lookup. The unique partial constraint
+  // (NULL rows excluded) catches the concurrent-race case where two
+  // simultaneous re-evaluations both pass the cache check; only one
+  // INSERT succeeds, the orchestrator's catch on P2002 re-queries
+  // and returns the winner's row.
+  @@unique([sessionId, phase, inputFingerprint], map: "phase_evaluations_session_phase_fingerprint_uniq")
   @@map("phase_evaluations")
 }
 

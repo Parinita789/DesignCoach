@@ -8,7 +8,12 @@ import { EvaluationAuditPayload, PhaseEvaluationResult } from '../types/evaluati
 export class EvaluationsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  createPhaseEvaluation(sessionId: string, phase: Phase, result: PhaseEvaluationResult) {
+  createPhaseEvaluation(
+    sessionId: string,
+    phase: Phase,
+    result: PhaseEvaluationResult,
+    inputFingerprint: string | null,
+  ) {
     return this.prisma.phaseEvaluation.create({
       data: {
         sessionId,
@@ -18,8 +23,21 @@ export class EvaluationsRepository {
         feedbackText: result.feedbackText,
         topActionableItems: result.topActionableItems as unknown as Prisma.InputJsonValue,
         gapTopics: result.gapTopics as unknown as Prisma.InputJsonValue,
+        inputFingerprint,
       },
     });
+  }
+
+  // Lookup for content-based caching. Returns the most-recent prior eval
+  // with the same inputs (same fingerprint) for this session+phase, or
+  // null if none exists. NULL fingerprints (pre-migration rows) are
+  // never matched — they don't participate in caching.
+  async findByFingerprint(sessionId: string, phase: Phase, inputFingerprint: string) {
+    const row = await this.prisma.phaseEvaluation.findFirst({
+      where: { sessionId, phase, inputFingerprint },
+      orderBy: { evaluatedAt: 'desc' },
+    });
+    return row;
   }
 
   createEvaluationAudit(phaseEvaluationId: string, audit: EvaluationAuditPayload) {

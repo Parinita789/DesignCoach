@@ -59,11 +59,15 @@ function makeOrchestrator(deps: {
   const planAgent = { evaluate: jest.fn().mockResolvedValue(deps.planResult ?? makeResult('plan')) };
   const buildAgent = { evaluate: jest.fn().mockResolvedValue(deps.buildResult ?? makeResult('build')) };
   const evalsRepo = {
-    createPhaseEvaluation: jest.fn().mockImplementation(async (_sid, phase) => ({
-      id: `eid-${phase}`,
-      phase,
-    })),
+    createPhaseEvaluation: jest
+      .fn()
+      .mockImplementation(async (_sid, phase, _result, fingerprint) => ({
+        id: `eid-${phase}`,
+        phase,
+        inputFingerprint: fingerprint ?? null,
+      })),
     createEvaluationAudit: jest.fn().mockResolvedValue(undefined),
+    findByFingerprint: jest.fn().mockResolvedValue(null),
   };
   const config = { get: jest.fn() };
   const eventEmitter = { emit: jest.fn() };
@@ -218,5 +222,104 @@ describe('OrchestratorService.run buildContext population', () => {
     const t = makeOrchestrator({});
     await t.svc.run(SID, ['plan']);
     expect(t.buildContextSvc.load).not.toHaveBeenCalled();
+  });
+});
+
+describe('OrchestratorService.run content-based caching', () => {
+  it('persists a fingerprint on the new eval row', async () => {
+    const t = makeOrchestrator({});
+    await t.svc.run(SID, ['plan']);
+    expect(t.evalsRepo.createPhaseEvaluation).toHaveBeenCalledTimes(1);
+    const [_sid, _phase, _result, fingerprint] = t.evalsRepo.createPhaseEvaluation.mock.calls[0];
+    expect(fingerprint).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('returns the cached row when a prior eval with the same fingerprint exists', async () => {
+    const t = makeOrchestrator({});
+    const cachedRow = {
+      id: 'cached-eid',
+      phase: 'plan',
+      inputFingerprint: 'cached-fp',
+      score: 4.2,
+    };
+    t.evalsRepo.findByFingerprint.mockResolvedValueOnce(cachedRow);
+
+    const result = await t.svc.run(SID, ['plan']);
+
+    expect(result).toEqual([cachedRow]);
+    expect(t.planAgent.evaluate).not.toHaveBeenCalled();
+    expect(t.evalsRepo.createPhaseEvaluation).not.toHaveBeenCalled();
+    expect(t.eventEmitter.emit).not.toHaveBeenCalled();
+  });
+
+  it('runs the agent normally on cache miss (findByFingerprint returns null)', async () => {
+    const t = makeOrchestrator({});
+    // default mock already returns null — this test documents the
+    // expected behavior on miss
+    await t.svc.run(SID, ['plan']);
+    expect(t.evalsRepo.findByFingerprint).toHaveBeenCalledTimes(1);
+    expect(t.planAgent.evaluate).toHaveBeenCalledTimes(1);
+    expect(t.evalsRepo.createPhaseEvaluation).toHaveBeenCalledTimes(1);
+  });
+
+  it('looks up the fingerprint scoped to (sessionId, phase, fingerprint)', async () => {
+    const t = makeOrchestrator({});
+    await t.svc.run(SID, ['build']);
+    const [sessionId, phase, fingerprint] = t.evalsRepo.findByFingerprint.mock.calls[0];
+    expect(sessionId).toBe(SID);
+    expect(phase).toBe('build');
+    expect(fingerprint).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('returns the winner row on P2002 concurrent-race conflict and does not emit event', async () => {
+    const t = makeOrchestrator({});
+    // First findByFingerprint (cache check) returns null → agent runs.
+    // createPhaseEvaluation throws P2002 (another orchestrator beat us).
+    // Second findByFingerprint (post-conflict) returns the winner.
+    const winnerRow = {
+      id: 'winner-eid',
+      phase: 'plan',
+      inputFingerprint: 'shared-fp',
+      score: 4.0,
+    };
+    t.evalsRepo.findByFingerprint
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(winnerRow);
+    t.evalsRepo.createPhaseEvaluation.mockRejectedValueOnce({
+      code: 'P2002',
+      message: 'Unique constraint failed on (session_id, phase, input_fingerprint)',
+    });
+
+    const result = await t.svc.run(SID, ['plan']);
+
+    expect(result).toEqual([winnerRow]);
+    // Audit was not created on the conflict path (winner already has its audit).
+    expect(t.evalsRepo.createEvaluationAudit).not.toHaveBeenCalled();
+    // Event was not emitted on the conflict path (winner already emitted).
+    expect(t.eventEmitter.emit).not.toHaveBeenCalled();
+  });
+
+  it('propagates non-P2002 DB errors (does not swallow real failures)', async () => {
+    const t = makeOrchestrator({});
+    t.evalsRepo.createPhaseEvaluation.mockRejectedValueOnce(
+      new Error('connection reset by peer'),
+    );
+    await expect(t.svc.run(SID, ['plan'])).rejects.toThrow(/connection reset/);
+  });
+
+  it('rethrows the original P2002 if no winner row exists after the conflict (unexpected state)', async () => {
+    const t = makeOrchestrator({});
+    // Cache miss → agent runs → P2002 thrown → re-query returns null.
+    // This is "shouldn't happen" territory; we surface the original error
+    // rather than silently invent a row.
+    t.evalsRepo.findByFingerprint
+      .mockResolvedValueOnce(null)  // initial cache check
+      .mockResolvedValueOnce(null); // post-conflict re-query
+    t.evalsRepo.createPhaseEvaluation.mockRejectedValueOnce({
+      code: 'P2002',
+      message: 'Unique constraint failed',
+    });
+
+    await expect(t.svc.run(SID, ['plan'])).rejects.toMatchObject({ code: 'P2002' });
   });
 });
