@@ -12,6 +12,7 @@ export interface GapSignalContext {
 }
 
 export interface SignalMentorInput {
+  userId: string;
   question: string;
   planMd: string | null;
   gaps: GapSignalContext[];

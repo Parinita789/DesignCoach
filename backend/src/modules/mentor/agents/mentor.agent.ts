@@ -47,6 +47,8 @@ export class MentorAgent {
         maxTokens: AGENTS_CONFIG.mentorAgent.maxTokens,
         temperature: 0,
         model: intendedModel,
+        userId: input.userId,
+        route: 'mentor.generate',
       },
     );
     const latencyMs = Math.round(performance.now() - llmStart);

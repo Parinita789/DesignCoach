@@ -73,6 +73,8 @@ export class BuildAgent extends BasePhaseAgent {
             }
           : {}),
         model: intendedModel,
+        userId: input.userId,
+        route: 'build.evaluate',
       },
     );
     const latencyMs = Math.round(performance.now() - llmStart);

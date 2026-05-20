@@ -23,6 +23,7 @@ function gap(id: string, polarity: 'good' | 'bad', verdict: 'hit' | 'miss' | 'pa
 
 function makeInput(...gaps: ReturnType<typeof gap>[]): SignalMentorInput {
   return {
+    userId: 'uid-1',
     question: 'design a URL shortener',
     planMd: '# Plan\n\nshort plan body',
     gaps: gaps as SignalMentorInput['gaps'],

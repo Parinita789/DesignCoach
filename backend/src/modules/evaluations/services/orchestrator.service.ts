@@ -77,6 +77,7 @@ export class OrchestratorService {
         startedAt: session.startedAt,
         endedAt: session.endedAt,
       },
+      userId: session.userId,
       planMd,
       snapshots: allSnapshots.map((s) => ({
         takenAt: s.takenAt,

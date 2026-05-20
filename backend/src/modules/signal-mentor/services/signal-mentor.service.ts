@@ -105,6 +105,7 @@ export class SignalMentorService {
       .filter((g): g is GapSignalContext => g !== null);
 
     const input: SignalMentorInput = {
+      userId: session.userId,
       question: session.question.prompt,
       planMd,
       gaps,

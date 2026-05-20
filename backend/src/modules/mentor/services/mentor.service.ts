@@ -61,6 +61,7 @@ export class MentorService {
     const crossPhase = await this.loadCrossPhaseSummary(evalRow.sessionId, evaluationId, phase);
 
     const input: MentorInput = {
+      userId: session.userId,
       question: session.question.prompt,
       planMd,
       signalResults: evalRow.signalResults as unknown as Record<string, SignalResult>,

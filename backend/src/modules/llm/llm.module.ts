@@ -7,9 +7,11 @@ import { AnthropicProvider } from './providers/anthropic.provider';
 import { OllamaProvider } from './providers/ollama.provider';
 import { ClaudeCliProvider } from './providers/claude-cli.provider';
 import { LlmProviderFactory } from './providers/llm-provider.factory';
+import { CostCapModule } from '../cost-cap/cost-cap.module';
 
 @Global()
 @Module({
+  imports: [CostCapModule],
   providers: [
     LlmService,
     LlmProviderFactory,

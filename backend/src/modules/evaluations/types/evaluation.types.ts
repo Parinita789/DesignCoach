@@ -8,6 +8,7 @@ export interface PhaseEvalInput {
     startedAt: Date;
     endedAt: Date | null;
   };
+  userId: string;
   planMd: string | null;
   snapshots: Array<{
     takenAt: Date;

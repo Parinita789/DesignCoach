@@ -6,6 +6,7 @@ export interface MentorArtifact {
 }
 
 export interface MentorInput {
+  userId: string;
   question: string;
   planMd: string | null;
   signalResults: Record<

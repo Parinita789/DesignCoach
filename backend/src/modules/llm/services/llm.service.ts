@@ -2,6 +2,8 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ChatMessage, LlmCallOptions, LlmResponse } from '../types/llm.types';
 import { LlmProviderFactory } from '../providers/llm-provider.factory';
+import { CostCapService } from '../../cost-cap/services/cost-cap.service';
+import { LlmProvider as CostCapProvider } from '../../cost-cap/pricing';
 
 const DEFAULT_TIMEOUT_MS = 90_000;
 const DEFAULT_MAX_ATTEMPTS = 3;
@@ -25,6 +27,7 @@ export class LlmService {
   constructor(
     private readonly factory: LlmProviderFactory,
     @Optional() config?: ConfigService,
+    @Optional() private readonly costCap?: CostCapService,
   ) {
     this.timeoutMs = readNum(config, 'LLM_TIMEOUT_MS', DEFAULT_TIMEOUT_MS);
     this.maxAttempts = Math.max(
@@ -38,12 +41,25 @@ export class LlmService {
   // an exponential-backoff retry on transient failures (timeouts,
   // 5xx, 429, network errors). Non-retryable errors (4xx other than
   // 429, validation errors, etc.) propagate on the first try.
+  //
+  // When opts.userId + opts.route are both set, the call is gated by
+  // the user's daily cost cap (pre) and the resulting spend is
+  // recorded (post). Record failures are logged but not rethrown —
+  // the LLM response was already paid for, so failing the request now
+  // would burn budget without giving the user their answer.
   async call(messages: ChatMessage[], opts: LlmCallOptions = {}): Promise<LlmResponse> {
+    const capScope = opts.userId && opts.route ? { userId: opts.userId, route: opts.route } : null;
+    if (capScope && this.costCap) {
+      await this.costCap.assertWithinCap(capScope.userId);
+    }
+
     const provider = this.factory.get();
     let lastErr: unknown;
+    let response: LlmResponse | null = null;
     for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
       try {
-        return await this.withTimeout(provider.call(messages, opts));
+        response = await this.withTimeout(provider.call(messages, opts));
+        break;
       } catch (err) {
         lastErr = err;
         const retryable = this.isRetryable(err);
@@ -58,7 +74,30 @@ export class LlmService {
         await sleep(delayMs);
       }
     }
-    throw lastErr;
+    if (!response) throw lastErr;
+
+    if (capScope && this.costCap) {
+      try {
+        await this.costCap.record({
+          userId: capScope.userId,
+          provider: provider.name as CostCapProvider,
+          model: response.modelUsed,
+          tokens: {
+            tokensIn: response.tokensIn,
+            tokensOut: response.tokensOut,
+            cacheReadTokens: response.cacheReadTokens,
+            cacheCreationTokens: response.cacheCreationTokens,
+          },
+          route: capScope.route,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `Failed to record LLM spend for user=${capScope.userId} route=${capScope.route}: ` +
+            this.errorSummary(err),
+        );
+      }
+    }
+    return response;
   }
 
   supportsToolUse(): boolean {

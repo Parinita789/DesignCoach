@@ -58,6 +58,8 @@ export class SignalMentorAgent {
           ? { tools: [tool], toolChoice: { type: 'tool', name: SUBMIT_ANNOTATIONS_TOOL_NAME } }
           : {}),
         model: intendedModel,
+        userId: input.userId,
+        route: 'signal-mentor.generate',
       },
     );
     const latencyMs = Math.round(performance.now() - llmStart);

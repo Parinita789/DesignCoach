@@ -36,6 +36,7 @@ function makeInput(overrides: Partial<PhaseEvalInput> = {}): PhaseEvalInput {
       startedAt: new Date('2026-05-07T09:00:00Z'),
       endedAt: new Date('2026-05-07T10:00:00Z'),
     },
+    userId: 'uid-1',
     planMd:
       '# Plan\nScope: implement /shorten and /:slug.\nComponent boundaries: handlers/ -> services/ -> repos/.\nValidation: pytest covers each endpoint.',
     snapshots: [],

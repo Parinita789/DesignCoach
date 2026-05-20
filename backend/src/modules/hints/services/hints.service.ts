@@ -50,6 +50,8 @@ export class HintsService {
         { text: `## Session question\n${session.question.prompt}`, cacheable: true },
       ],
       maxTokens: AGENTS_CONFIG.hints.maxTokens,
+      userId,
+      route: 'hints.send',
     });
 
     const elapsedMinutes = Math.floor(

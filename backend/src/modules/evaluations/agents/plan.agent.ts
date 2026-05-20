@@ -81,6 +81,8 @@ export class PlanAgent extends BasePhaseAgent {
             }
           : {}),
         model: intendedModel,
+        userId: input.userId,
+        route: 'plan.evaluate',
       },
     );
     const latencyMs = Math.round(performance.now() - llmStart);

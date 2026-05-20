@@ -28,6 +28,12 @@ export interface LlmCallOptions {
   system?: string | SystemBlock[];
   tools?: ToolDefinition[];
   toolChoice?: ToolChoice;
+  // Cost-cap accounting. When both are set, LlmService.call checks the
+  // user's daily cap before dispatching and records a spend row after
+  // success. Missing either (e.g. internal scripts, test stubs) skips
+  // capping — by design, so tests don't need the cost-cap module wired.
+  userId?: string;
+  route?: string;
 }
 
 export interface ToolUsePayload {
