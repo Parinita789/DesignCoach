@@ -116,10 +116,91 @@ const PRESET_LABELS: Record<GuardrailPresetName, string> = {
   question: 'Question',
 };
 
-// Convenience: most callers want "guardrail message if guardrail
-// error, else generic error string." This handles the dispatch.
+// ---------------------------------------------------------------------------
+// Rate-limit (429) error parsing
+//
+// The backend's @nestjs/throttler returns HTTP 429 with a Retry-After
+// header when a per-user or per-IP limit is exceeded. The body is not
+// structured (no `code` field — see gaps.md #8), so we detect by
+// status code and read the header. Retry-After is either a positive
+// integer (seconds) or an HTTP-date; we support both.
+// ---------------------------------------------------------------------------
+
+export interface RateLimitInfo {
+  // Best-effort seconds-until-retry. Null when the header is missing
+  // or unparseable — caller renders a generic "slow down" message.
+  retryAfterSeconds: number | null;
+}
+
+export function extractRateLimitError(err: unknown): RateLimitInfo | null {
+  if (!err || typeof err !== 'object') return null;
+  const e = err as {
+    response?: { status?: number; headers?: Record<string, unknown> };
+  };
+  if (e.response?.status !== 429) return null;
+
+  const headers = e.response.headers ?? {};
+  // @nestjs/throttler v6 with multiple named tiers emits per-tier
+  // headers (Retry-After-short, Retry-After-medium, Retry-After-long)
+  // rather than the standard Retry-After. Any of the tiers could be
+  // the one that blocked, so we take the MAX of whatever shows up —
+  // that's the soonest the client can definitely retry without
+  // hitting a different tier's cap. Standard Retry-After is checked
+  // first in case the backend normalization gap (gaps.md #8) lands
+  // later and we get a cleaner single header.
+  const candidates = [
+    headers['retry-after'],
+    headers['Retry-After'],
+    headers['retry-after-short'],
+    headers['Retry-After-short'],
+    headers['retry-after-medium'],
+    headers['Retry-After-medium'],
+    headers['retry-after-long'],
+    headers['Retry-After-long'],
+  ];
+
+  let max: number | null = null;
+  for (const raw of candidates) {
+    const parsed = parseRetryAfter(raw as string | number | undefined);
+    if (parsed !== null && (max === null || parsed > max)) max = parsed;
+  }
+
+  return { retryAfterSeconds: max };
+}
+
+function parseRetryAfter(raw: string | number | undefined): number | null {
+  if (raw === undefined || raw === null) return null;
+  // Delta-seconds variant (e.g. "30" or 30).
+  const asNum = Number(raw);
+  if (Number.isFinite(asNum) && asNum >= 0) return Math.ceil(asNum);
+  // HTTP-date variant (e.g. "Wed, 21 Oct 2026 07:28:00 GMT").
+  if (typeof raw === 'string') {
+    const t = Date.parse(raw);
+    if (!Number.isNaN(t)) {
+      const diff = Math.ceil((t - Date.now()) / 1000);
+      return diff > 0 ? diff : null;
+    }
+  }
+  return null;
+}
+
+export function formatRateLimitMessage(info: RateLimitInfo): string {
+  const s = info.retryAfterSeconds;
+  if (s === null) return 'Too many requests. Please slow down and try again.';
+  if (s <= 1) return 'Too many requests. Try again in a moment.';
+  if (s < 60) return `Too many requests. Try again in ${s} seconds.`;
+  const minutes = Math.ceil(s / 60);
+  return `Too many requests. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+}
+
+// Convenience: dispatches between guardrail, rate-limit, and generic
+// error messages. Order matters — check the most-specific shape
+// first (guardrail 400 + structured body) before the less-specific
+// 429 status-only check.
 export function describeError(err: unknown): string {
   const guardrail = extractGuardrailError(err);
   if (guardrail) return formatGuardrailMessage(guardrail);
+  const rateLimit = extractRateLimitError(err);
+  if (rateLimit) return formatRateLimitMessage(rateLimit);
   return extractApiError(err);
 }
