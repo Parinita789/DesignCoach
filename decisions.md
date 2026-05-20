@@ -197,10 +197,21 @@ End of session
 
 ### Decisions about what NOT to build:
 
+> **Update (production-hardening, 2026-05).** The "no auth / no
+> multi-user" stance below is now obsolete. Phases 1–3 of the
+> production-hardening plan shipped: JWT auth + per-row ownership
+> (User model, `Question.userId`, `Session.userId`, global
+> AuthGuard), per-tier rate limiting (`@nestjs/throttler` with named
+> tiers + per-user tracker), and per-user daily LLM cost cap
+> (`LlmSpend` ledger + `CostCapService.assertWithinCap` wrapping
+> every `LlmService.call`). See the engineering-highlights section
+> of the README for the surface, and `backend/prisma/SCHEMA.md` for
+> the schema shape.
+
+
 - **No real-time *judge* interruptions during the session.** The grading agent is silent until the user ends the session. **Note:** there *is* an in-tool Socratic-coach hint chat (`HintChatPanel`) that replies to user questions during the session — this is a coach, not the judge. The judge never sees the chat output until evaluation time.
 - **No cross-session memory in the judge.** Each session evaluated independently. Trend analysis happens in the dashboard, not the judge.
 - **No support for AI tools other than the configured LLM provider.** Originally scoped to Claude Code only; broadened to "whichever provider the env selects" via the factory. Still no multi-vendor abstraction beyond Anthropic / Ollama / Claude CLI.
-- **No multi-user / authentication.** Personal tool. Auth adds setup time without value at this stage.
 - **No hosted deployment.** Local-only for v1. Render/Railway later if cross-device access becomes useful.
 - **No rubric editing UI.** Rubrics live as YAML files in the codebase. Editing is a code change. Avoids building a CMS for a single user.
 - **No editing seniority or mode after session creation.** Both are frozen at the first attempt's start. To re-evaluate at a different level, the user uses the "Retry as: [Junior][Mid][Senior][Staff]" picker, which creates a new sibling attempt.

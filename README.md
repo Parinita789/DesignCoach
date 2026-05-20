@@ -15,6 +15,8 @@ under cost, retries, and partial failure.
 
 ### Capabilities at a glance
 
+- **Sign up + sign in.** Sessions, questions, and spend are per-user;
+  ownership is enforced server-side on every read and mutation.
 - **Pose a real system-design question** (`POST /questions`); the
   app classifies its kind (`traditional_design` /
   `agentic_design` / `agentic_build`) and loads a matching rubric.
@@ -31,6 +33,10 @@ under cost, retries, and partial failure.
   implement. File saves and Claude Code conversation turns stream
   to the backend; a second eval scores the build phase against a
   different rubric.
+- **See your daily LLM spend.** A sidebar widget shows
+  `$spent / $cap` against the configured daily cap with a thin
+  progress bar (green → amber → red). Auto-refreshes after every
+  LLM-spending action.
 
 ### Engineering highlights
 
@@ -61,6 +67,30 @@ under cost, retries, and partial failure.
   exception filter to a structured HTTP 400 — the frontend reads a
   stable `code` field, and the rejected content never enters a
   log line by construction.
+- **JWT auth + service-layer ownership.** Every controller is
+  default-protected via a global `AuthGuard` registered through
+  `APP_GUARD`; opt-out is explicit via `@Public()` / `@CliAuthenticated()`.
+  `OwnershipService.assertOwns{Session,Question,Evaluation}` blocks
+  user A from reading user B's resources, with the check inlined on
+  hot read paths to avoid a second DB round-trip.
+- **Per-tier rate limiting.** `@nestjs/throttler` with named tiers
+  (short/medium/long) and a custom `getTracker` that keys on
+  `user:<id>` when authenticated, `ip:<addr>` otherwise. LLM-spending
+  routes get a tighter `LLM_POST_THROTTLE` preset; auth endpoints
+  get an anti-brute-force preset. 429 responses surface per-tier
+  `Retry-After-*` headers; the frontend `describeError` takes the
+  max across tiers.
+- **Per-user daily LLM cost cap.** `LlmService.call` wraps every
+  provider call with `assertWithinCap(userId)` (pre — blocks the
+  dispatch when SUM(estimated_cost_usd) since UTC midnight ≥ the
+  configured cap) and `record(...)` (post — writes a row to the
+  `llm_spend` ledger with provider-aware pricing). The ledger is
+  user-keyed and indexed on `(user_id, occurred_at)` — sub-ms cap
+  checks today, arbitrary-window analytics for free. Subscription
+  providers (`claude_cli`, `ollama`) record tokens but cost = $0.
+  Cap-exceeded surfaces as HTTP 403 with `code: COST_CAP_EXCEEDED`
+  + `resetAtUtc`; the frontend renders "Daily LLM budget reached:
+  $X / $Y. Resets in Nh Nm."
 
 ---
 
@@ -85,7 +115,9 @@ createdb ai_judge
 # 2. Backend
 cd backend
 npm install
-cp .env.example .env             # set ANTHROPIC_API_KEY or use claude CLI
+cp .env.example .env             # set ANTHROPIC_API_KEY or use claude CLI;
+                                 # set JWT_SECRET (openssl rand -hex 32);
+                                 # optionally LLM_DAILY_CAP_USD (default $5/user/day)
 npx prisma migrate deploy
 npm run start:dev                # http://localhost:3000/api
 
@@ -128,12 +160,12 @@ graphs.
 
 |     | |
 |---|---|
-| **Backend**  | NestJS 10 · TypeScript · Prisma · PostgreSQL · Anthropic SDK |
-| **Frontend** | React 18 · Vite · TypeScript · Tailwind · Monaco · TanStack Query · Recharts · Mermaid |
+| **Backend**  | NestJS 10 · TypeScript · Prisma · PostgreSQL · Anthropic SDK · `@nestjs/jwt` + bcryptjs · `@nestjs/throttler` |
+| **Frontend** | React 18 · Vite · TypeScript · Tailwind · Monaco · TanStack Query · Zustand (auth) · Recharts · Mermaid |
 | **CLI watcher** | TypeScript · commander · chokidar · axios · local SQLite buffer |
 | **Eval harness** | ts-node CLI runs real `PlanAgent` + `BuildAgent` against versioned fixtures |
 | **Tooling agents** | `agents/packages/mapper/` (LLM module summaries) · `agents/tools/graphify/` (knowledge graphs) · `agents/packages/api-flow/` (static API call-tree extractor) |
-| **DB** | 11 models, ~14 relations — see `agents/data/schema/SCHEMA_DIAGRAM.html` |
+| **DB** | 13 models, 17 relations — see `agents/data/schema/SCHEMA_DIAGRAM.html` or `backend/prisma/SCHEMA.md` |
 
 ---
 

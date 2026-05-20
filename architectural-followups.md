@@ -127,43 +127,42 @@ subscription + dashboard authoring.
 
 ---
 
-## Track 4 — Cost tracking + per-session / per-day budgets
+## ~~Track 4 — Cost tracking + per-session / per-day budgets~~ — SHIPPED
 
 **Source review items:** Gap 25
+**Status:** Shipped via commits `86a3cb3` (ledger), `56b20fa` (service +
+pricing), `cdfafaf` (LlmService wire-up), `8d4ac54` (frontend 403
+handling), `fff00e7` (sidebar widget + `GET /cost-cap/today`).
 
-**What it is.** Token counts and model strings are already on every
-audit row. We never aggregate them. There's no answer to "how much
-has this user spent on re-evaluations this week" or "what's the
-average dollar cost of one successful mentor + signal-mentor pair."
-For a self-hosted single-user tool that's tolerable; once it's
-multi-tenant or there's any external review use, it isn't.
+**What landed vs the original draft.** The implementation took a
+shape the draft didn't anticipate: a denormalized, user-keyed
+`llm_spend` ledger (one row per LLM call, with `estimated_cost_usd`
+computed at call time from `backend/src/modules/cost-cap/pricing.ts`)
+rather than adding a `cost_usd` column to each existing audit table.
+The rationale lives in `backend/prisma/SCHEMA.md` under "LlmSpend is
+the cost-cap ledger, not an audit replacement" — short version:
+single-table index seek on `(user_id, occurred_at)` for the hot cap
+check, every LLM call captured in one place via the wrap inside
+`LlmService.call`, and analytics ("which route, which model, what
+period") fall out of the same shape for free.
 
-**The fix is in two parts.**
+**Tracking.** Live in `backend/src/modules/cost-cap/pricing.ts`
+(`ANTHROPIC_PRICING` table) and `llm_spend` rows. Subscription
+providers (`claude_cli`, `ollama`) record tokens but cost = $0.
 
-1. *Tracking.* A small `cost_models.yaml` (or `Pricing.ts`) that maps
-   model strings to (input $/Mtok, output $/Mtok, cache write $/Mtok,
-   cache read $/Mtok). At persist time of `EvaluationAudit`, compute
-   the dollar cost from `tokensIn × cacheReadTokens × cacheCreationTokens`
-   and store it on the audit row (new `cost_usd Decimal(10,6)` column).
-   Same for mentor + signal-mentor artifacts.
+**Budgets.** `LLM_DAILY_CAP_USD` env (default $5/user/day) drives
+`CostCapService.assertWithinCap` before every LLM dispatch. Cap
+exceeded → HTTP 403 with `code: COST_CAP_EXCEEDED` + `resetAtUtc`.
+The frontend renders "Daily LLM budget reached: $X / $Y. Resets in
+Nh Nm." via `describeError`, plus a sidebar progress widget showing
+live spend.
 
-2. *Budgets.* Optional, behind a feature flag. A `daily_cost_budgets`
-   table keyed on (scope = 'global' | 'session', limit_usd). Before a
-   re-evaluate dispatch, sum-as-of(today, scope) and reject 429-style
-   if the budget would be exceeded.
-
-**Why this matters in this stack specifically.** The Gap 11 work
-already persists the LLM-claimed score as a queryable signal; this
-is the same shape of work for cost. Both make the system observable
-on dimensions the original review explicitly flagged as "you can't
-answer this from the current schema."
-
-**Sequencing.** Tracking before budgets — the budget query needs the
-tracked column. Tracking is purely additive (new column + persist-time
-compute); budgets need a UI affordance to surface the rejection.
-
-**Rough size.** ~1 day for tracking, ~2 days for budgets including
-the UI/DTO work.
+**Still deferred from the draft.** Per-session budgets (the daft
+contemplated `daily_cost_budgets` keyed on `scope = 'global' |
+'session'`). The shipped scope is per-user only; session-level
+budgets weren't built. Adding them is one WHERE-clause and a config
+column. Per-tier user budgets (paying-tier override on the User
+row) are also still v2.
 
 ---
 
@@ -201,9 +200,9 @@ frontend polling + state rendering, retry endpoint + UI.
 
 ## Suggested order
 
-1. **Track 1 (outbox)** — most leverage; unblocks Tracks 4 and 5.
+1. **Track 1 (outbox)** — most leverage; unblocks Track 5.
 2. **Track 3 (OTel)** — cheap, immediate observability, no dependencies.
-3. **Track 4 (cost tracking)** — additive, quick win, surfaces a real gap.
+3. ~~**Track 4 (cost tracking)**~~ — SHIPPED. See Track 4 section.
 4. **Track 2 (JWT auth)** — mostly a perf + side-channel cleanup; not urgent unless multi-tenant.
 5. **Track 5 (run state machine)** — the longest pole; do it after the outbox makes the underlying state durable.
 
