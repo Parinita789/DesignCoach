@@ -193,13 +193,83 @@ export function formatRateLimitMessage(info: RateLimitInfo): string {
   return `Too many requests. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
 }
 
-// Convenience: dispatches between guardrail, rate-limit, and generic
-// error messages. Order matters — check the most-specific shape
-// first (guardrail 400 + structured body) before the less-specific
-// 429 status-only check.
+// ---------------------------------------------------------------------------
+// Cost-cap (403 COST_CAP_EXCEEDED) error parsing
+//
+// CostCapService.assertWithinCap throws a typed 403 before the LLM
+// call when the user's spend since UTC midnight is >= the daily cap.
+// Body shape:
+//   { statusCode: 403, error: 'Forbidden',
+//     code: 'COST_CAP_EXCEEDED',
+//     spentTodayUsd: number, capUsd: number,
+//     resetAtUtc: string (ISO),
+//     message: string }
+// ---------------------------------------------------------------------------
+
+export interface CostCapInfo {
+  spentTodayUsd: number;
+  capUsd: number;
+  resetAtUtc: string;
+  message: string;
+}
+
+export function extractCostCapError(err: unknown): CostCapInfo | null {
+  if (!err || typeof err !== 'object') return null;
+  const e = err as { response?: { data?: unknown; status?: number } };
+  if (e.response?.status !== 403) return null;
+  const body = e.response.data;
+  if (!body || typeof body !== 'object') return null;
+  const b = body as Record<string, unknown>;
+  if (
+    b.code !== 'COST_CAP_EXCEEDED' ||
+    typeof b.spentTodayUsd !== 'number' ||
+    typeof b.capUsd !== 'number' ||
+    typeof b.resetAtUtc !== 'string' ||
+    typeof b.message !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    spentTodayUsd: b.spentTodayUsd,
+    capUsd: b.capUsd,
+    resetAtUtc: b.resetAtUtc,
+    message: b.message,
+  };
+}
+
+export function formatCostCapMessage(info: CostCapInfo): string {
+  const spent = info.spentTodayUsd.toFixed(2);
+  const cap = info.capUsd.toFixed(2);
+  const resetIn = formatTimeUntil(info.resetAtUtc);
+  const tail = resetIn ? ` Resets in ${resetIn}.` : '';
+  return `Daily LLM budget reached: $${spent} of $${cap} used.${tail}`;
+}
+
+// Returns "Nm" / "Nh Mm" / null if the timestamp is invalid or already
+// in the past. Used to surface "resets in 4h 12m" without dragging in
+// a full date library.
+function formatTimeUntil(iso: string): string | null {
+  const target = Date.parse(iso);
+  if (Number.isNaN(target)) return null;
+  const diffMs = target - Date.now();
+  if (diffMs <= 0) return null;
+  const totalMinutes = Math.ceil(diffMs / 60_000);
+  if (totalMinutes < 60) return `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (minutes === 0) return `${hours} hour${hours === 1 ? '' : 's'}`;
+  return `${hours}h ${minutes}m`;
+}
+
+// Convenience: dispatches between guardrail, rate-limit, cost-cap,
+// and generic error messages. Order matters — check the most-specific
+// shapes first (typed body + status) before falling back to status-only
+// or generic message extraction.
 export function describeError(err: unknown): string {
   const guardrail = extractGuardrailError(err);
   if (guardrail) return formatGuardrailMessage(guardrail);
+  const costCap = extractCostCapError(err);
+  if (costCap) return formatCostCapMessage(costCap);
   const rateLimit = extractRateLimitError(err);
   if (rateLimit) return formatRateLimitMessage(rateLimit);
   return extractApiError(err);
