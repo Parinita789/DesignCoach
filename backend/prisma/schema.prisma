@@ -55,8 +55,43 @@ model User {
 
   questions Question[]
   sessions  Session[]
+  llmSpend  LlmSpend[]
 
   @@map("users")
+}
+
+// Per-user per-call LLM spend ledger. One row inserted by
+// CostCapService.record after every successful LLM call. The
+// CostCapService.assertWithinCap query reads SUM(estimated_cost_usd)
+// since UTC midnight for the user and rejects if it would exceed
+// LLM_DAILY_CAP_USD before the next call.
+//
+// estimated_cost_usd is from MODEL_PRICING in cost-cap/pricing.ts —
+// it's a server-side estimate, not the authoritative bill. Real
+// reconciliation against the Anthropic billing dashboard is a manual
+// ops process out of scope here.
+model LlmSpend {
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  occurredAt          DateTime @default(now()) @map("occurred_at")
+  // 'anthropic' | 'claude_cli' | 'ollama' — the LLM provider that
+  // actually served this call. claude_cli and ollama are zero-cost
+  // (subscription / local) but we still log them for visibility.
+  provider            String
+  model               String
+  tokensIn            Int      @map("tokens_in")
+  tokensOut           Int      @map("tokens_out")
+  cacheReadTokens     Int      @default(0) @map("cache_read_tokens")
+  cacheCreationTokens Int      @default(0) @map("cache_creation_tokens")
+  estimatedCostUsd    Decimal  @map("estimated_cost_usd") @db.Decimal(10, 6)
+  // The HTTP route that triggered the call ('POST /sessions/:id/hints'
+  // etc) — useful for "which endpoint is burning the budget" reports.
+  route               String
+
+  // Sum-since-midnight queries hit this index.
+  @@index([userId, occurredAt])
+  @@map("llm_spend")
 }
 
 model Question {
