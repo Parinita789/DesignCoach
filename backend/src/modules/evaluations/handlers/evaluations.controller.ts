@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { LLM_POST_THROTTLE } from '../../throttling/throttle-presets';
 import { EvaluationsService } from '../services/evaluations.service';
 import { RunEvaluationDto } from '../dto/run-evaluation.dto';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
@@ -15,6 +17,7 @@ export class EvaluationsController {
   ) {}
 
   @Post('sessions/:sessionId/evaluate')
+  @Throttle(LLM_POST_THROTTLE)
   @ApiOperation({
     summary: 'Re-run the plan-phase evaluation for a session',
     description:

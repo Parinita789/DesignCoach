@@ -4,6 +4,8 @@ import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CommonModule } from './common/common.module';
 import { AuthGuard } from './modules/auth/guards/auth.guard';
+import { ThrottlingModule } from './modules/throttling/throttling.module';
+import { UserOrIpThrottlerGuard } from './modules/throttling/user-or-ip-throttler.guard';
 import { DatabaseModule } from './database/database.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { SessionReadModule } from './modules/session-read/session-read.module';
@@ -26,6 +28,7 @@ import { BuildSessionsModule } from './modules/build-sessions/build-sessions.mod
     EventEmitterModule.forRoot(),
     CommonModule,
     AuthModule,
+    ThrottlingModule,
     DatabaseModule,
     LlmModule,
     ArtifactsModule,
@@ -43,6 +46,7 @@ import { BuildSessionsModule } from './modules/build-sessions/build-sessions.mod
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: UserOrIpThrottlerGuard },
   ],
 })
 export class AppModule {}

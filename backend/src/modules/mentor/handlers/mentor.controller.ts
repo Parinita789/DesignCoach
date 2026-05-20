@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { LLM_POST_THROTTLE } from '../../throttling/throttle-presets';
 import { MentorService } from '../services/mentor.service';
 import { GenerateMentorDto } from '../dto/generate-mentor.dto';
 import { OwnershipService } from '../../auth/services/ownership.service';
@@ -29,6 +31,7 @@ export class MentorController {
   }
 
   @Post(':evaluationId')
+  @Throttle(LLM_POST_THROTTLE)
   @ApiOperation({
     summary: 'Generate or regenerate the deep-dive mentor artifact',
     description:

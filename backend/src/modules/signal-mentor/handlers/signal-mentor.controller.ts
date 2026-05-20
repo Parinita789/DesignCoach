@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { LLM_POST_THROTTLE } from '../../throttling/throttle-presets';
 import { SignalMentorService } from '../services/signal-mentor.service';
 import { GenerateSignalMentorDto } from '../dto/generate-signal-mentor.dto';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
@@ -29,6 +31,7 @@ export class SignalMentorController {
   }
 
   @Post(':evaluationId')
+  @Throttle(LLM_POST_THROTTLE)
   @ApiOperation({
     summary: 'Generate or regenerate per-signal coaching',
     description:

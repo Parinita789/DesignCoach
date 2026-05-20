@@ -1,5 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { LLM_POST_THROTTLE } from '../../throttling/throttle-presets';
 import { QuestionsService } from '../services/questions.service';
 import { CreateQuestionDto, StartAttemptDto } from '../dto/create-question.dto';
 import { PaginationQueryDto, toPrismaPagination } from '../../../common/pagination/pagination';
@@ -17,6 +19,7 @@ export class QuestionsController {
   ) {}
 
   @Post()
+  @Throttle(LLM_POST_THROTTLE)
   @ApiOperation({
     summary: 'Create a question + first attempt',
     description:

@@ -1,5 +1,6 @@
 import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { BuildEventBatchDto } from '../dto/build-event.dto';
 import { BuildAIInteractionBatchDto } from '../dto/build-ai-interaction.dto';
 import { AuthedRequest, BuildSessionGuard, resolvedBuildSessionId } from '../guards/build-session.guard';
@@ -14,6 +15,7 @@ import { CliAuthenticated } from '../../auth/decorators/cli-authenticated.decora
 @ApiTags('build-sessions')
 @ApiBearerAuth('bearer')
 @CliAuthenticated()
+@SkipThrottle()
 @UseGuards(BuildSessionGuard)
 @Controller('build')
 export class BuildController {

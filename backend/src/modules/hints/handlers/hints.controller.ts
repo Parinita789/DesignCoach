@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { LLM_POST_THROTTLE } from '../../throttling/throttle-presets';
 import { HintsService } from '../services/hints.service';
 import { SendHintDto } from '../dto/send-hint.dto';
 import { GuardrailsService } from '../../guardrails/services/guardrails.service';
@@ -16,6 +18,7 @@ export class HintsController {
   ) {}
 
   @Post()
+  @Throttle(LLM_POST_THROTTLE)
   @ApiOperation({
     summary: 'Send a Socratic-coach question during an active session',
     description:

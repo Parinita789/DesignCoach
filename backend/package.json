@@ -30,6 +30,7 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/swagger": "^7.4.2",
+    "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^5.20.0",
     "@types/diff": "^7.0.2",
     "bcryptjs": "^3.0.3",
