@@ -143,7 +143,22 @@ export function SessionResultsPage() {
         .filter((r) => r.phase === 'plan')
         .sort((a, b) => (a.evaluatedAt < b.evaluatedAt ? 1 : -1))[0];
       if (!latestPlan) return false;
-      if (latestPlan.detailsCompletedAt || latestPlan.detailsError) return false;
+      if (latestPlan.detailsCompletedAt) return false;
+      if (latestPlan.detailsError) {
+        // Read the jobs cache rather than evaluationJobsQuery: that
+        // hook is declared below, so the closure can't reference it.
+        // A failed Call B attempt writes detailsError, but the job may
+        // still be retrying, and a later success clears the error.
+        const jobs =
+          queryClient.getQueryData<EvaluationJobStatus[]>(['evaluation-jobs', id]) ?? [];
+        const detailsRetrying = jobs.some(
+          (job) =>
+            job.jobType === 'plan-details' &&
+            job.evaluationId === latestPlan.id &&
+            (job.state === 'queued' || job.state === 'running'),
+        );
+        return detailsRetrying ? 3000 : false;
+      }
       // Only poll for "recent" rows — i.e., where the row is younger
       // than the 5min reasonable upper bound on Call B latency. An
       // older row with both nulls is a legacy pre-split row and will
