@@ -40,16 +40,12 @@ describe('EvaluationQueueService duplicate handling', () => {
 });
 
 describe('EvaluationQueueService retry detection', () => {
-  it('treats a failed attempt with attempts remaining as a pending retry', () => {
-    expect(willRetry(1, 3)).toBe(true);
-    expect(willRetry(2, 3)).toBe(true);
+  it('treats a failed attempt that BullMQ re-queued as a pending retry', () => {
+    expect(willRetry('delayed')).toBe(true);
+    expect(willRetry('waiting')).toBe(true);
   });
 
-  it('treats the last attempt as a terminal failure', () => {
-    expect(willRetry(3, 3)).toBe(false);
-  });
-
-  it('treats a job without an attempts option as single-attempt', () => {
-    expect(willRetry(1, undefined)).toBe(false);
+  it('treats a job in the failed set as terminal, even with attempts left', () => {
+    expect(willRetry('failed')).toBe(false);
   });
 });
