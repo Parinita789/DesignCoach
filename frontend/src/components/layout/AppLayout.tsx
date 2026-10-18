@@ -16,9 +16,11 @@ export function AppLayout() {
   const questionMatch = useMatch('/questions/:id');
   const newPracticeMatch = useMatch('/practice/new');
   const feedbackMatch = useMatch('/feedback');
+  const drillsMatch = useMatch('/drills');
   const activeSessionMatch = useMatch('/sessions/:id/active');
   const isQuestionsActive = !!homeMatch || !!questionMatch || !!newPracticeMatch;
   const isFeedbackActive = !!feedbackMatch;
+  const isDrillsActive = !!drillsMatch;
   const currentUser = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const themeMode = useThemeStore((s) => s.mode);
@@ -329,6 +331,36 @@ export function AppLayout() {
                   💬
                 </span>
                 {!collapsed && <span>Feedback</span>}
+              </Link>
+              <Link
+                to="/drills"
+                title="Pattern Drill"
+                aria-label="Pattern Drill"
+                className={`flex h-9 items-center rounded-md text-sm font-medium transition-colors ${
+                  collapsed ? 'justify-center px-0' : 'gap-2 px-3'
+                } ${
+                  isDrillsActive
+                    ? isDark
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-teal-700 text-white'
+                    : isDark
+                      ? 'text-slate-300 hover:bg-slate-900 hover:text-white'
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-950'
+                }`}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`inline-flex h-5 w-5 items-center justify-center rounded text-xs font-semibold ${
+                    isDrillsActive
+                      ? 'bg-white/15 text-white'
+                      : isDark
+                        ? 'bg-slate-800 text-slate-200'
+                        : 'bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  🧩
+                </span>
+                {!collapsed && <span>Pattern Drill</span>}
               </Link>
             </div>
           </nav>

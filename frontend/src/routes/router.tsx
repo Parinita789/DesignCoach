@@ -12,6 +12,7 @@ import { QuestionRedirectPage } from '@pages/QuestionDetail/QuestionRedirectPage
 import { LoginPage } from '@pages/Login/LoginPage';
 import { SignupPage } from '@pages/Signup/SignupPage';
 import { DashboardFeedbackPage } from '@pages/DashboardFeedback/DashboardFeedbackPage';
+import { PatternDrillPage } from '@pages/PatternDrill/PatternDrillPage';
 
 export const router = createBrowserRouter([
   // Public routes — accessible without auth. PublicOnly bounces to /home
@@ -38,6 +39,7 @@ export const router = createBrowserRouter([
           { path: 'home', element: <SessionStartPage /> },
           { path: 'practice/new', element: <NewQuestionPracticePage /> },
           { path: 'feedback', element: <DashboardFeedbackPage /> },
+          { path: 'drills', element: <PatternDrillPage /> },
           { path: 'questions/:id', element: <QuestionRedirectPage /> },
           { path: 'sessions/:id/active', element: <ActiveSessionPage /> },
           { path: 'sessions/:id', element: <SessionResultsPage /> },

@@ -41,7 +41,7 @@ export type GuardrailRejectionCode =
   | 'TOO_LONG'
   | 'EMPTY_AFTER_TRIM';
 
-export type GuardrailPresetName = 'plan' | 'hint' | 'question';
+export type GuardrailPresetName = 'plan' | 'hint' | 'question' | 'drillAnswer';
 
 export interface GuardrailRejectionInfo {
   code: GuardrailRejectionCode;
@@ -58,7 +58,7 @@ const GUARDRAIL_CODES: ReadonlySet<string> = new Set([
   'EMPTY_AFTER_TRIM',
 ]);
 
-const GUARDRAIL_PRESETS: ReadonlySet<string> = new Set(['plan', 'hint', 'question']);
+const GUARDRAIL_PRESETS: ReadonlySet<string> = new Set(['plan', 'hint', 'question', 'drillAnswer']);
 
 // Returns the structured rejection info if the error is a guardrail
 // 400 response, else null. Null lets callers fall back to
@@ -114,6 +114,7 @@ const PRESET_LABELS: Record<GuardrailPresetName, string> = {
   plan: 'Plan',
   hint: 'Hint',
   question: 'Question',
+  drillAnswer: 'Answer',
 };
 
 // ---------------------------------------------------------------------------
