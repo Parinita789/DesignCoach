@@ -21,6 +21,7 @@ import { QuestionsModule } from './modules/questions/questions.module';
 import { MentorModule } from './modules/mentor/mentor.module';
 import { SignalMentorModule } from './modules/signal-mentor/signal-mentor.module';
 import { BuildSessionsModule } from './modules/build-sessions/build-sessions.module';
+import { PatternDrillsModule } from './modules/pattern-drills/pattern-drills.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { BuildSessionsModule } from './modules/build-sessions/build-sessions.mod
     MentorModule,
     SignalMentorModule,
     BuildSessionsModule,
+    PatternDrillsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AuthGuard },

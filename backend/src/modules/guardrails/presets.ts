@@ -1,6 +1,6 @@
 import { UserContentTag } from '../../common/prompts/wrap-user-content';
 
-export type GuardrailPresetName = 'plan' | 'hint' | 'question';
+export type GuardrailPresetName = 'plan' | 'hint' | 'question' | 'drillAnswer';
 
 export interface GuardrailPreset {
   readonly name: GuardrailPresetName;
@@ -31,5 +31,11 @@ export const GUARDRAIL_PRESETS = {
     maxChars: 5_000,
     minChars: 20,
     tag: 'session_question',
+  },
+  drillAnswer: {
+    name: 'drillAnswer',
+    maxChars: 500,
+    minChars: 1,
+    tag: 'drill_answer',
   },
 } as const satisfies Record<GuardrailPresetName, GuardrailPreset>;

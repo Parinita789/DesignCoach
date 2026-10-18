@@ -110,6 +110,10 @@ export const AGENTS_CONFIG = {
   hints: {
     maxTokens: num('HINTS_MAX_TOKENS', 1024),
   },
+  patternDrillGrader: {
+    maxTokens: num('PATTERN_DRILL_GRADER_MAX_TOKENS', 2048),
+    defaultModel: str('PATTERN_DRILL_GRADER_MODEL', GLOBAL_MODEL),
+  },
   buildContext: {
     topKeyFiles: num('BUILD_CONTEXT_TOP_KEY_FILES', 5),
     keyFileMaxChars: num('BUILD_CONTEXT_KEY_FILE_MAX_CHARS', 4000),

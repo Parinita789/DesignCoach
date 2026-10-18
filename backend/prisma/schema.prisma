@@ -74,6 +74,7 @@ model User {
   llmSpend  LlmSpend[]
   feedbackSummary FeedbackSummary?
   feedbackProjectionState FeedbackProjectionState?
+  patternDrillSets PatternDrillSet[]
 
   @@index([deletedAt])
   @@map("users")
@@ -430,6 +431,31 @@ model AIInteraction {
   @@index([sessionId])
   @@index([inferredPhase])
   @@map("ai_interactions")
+}
+
+// Daily DSA pattern-classification drill (unrelated to the Question/Session/
+// rubric domain above — a drill set is generated, submitted, and graded in one
+// short-lived exchange, with no plan/build phases). One row per generated set;
+// submittedAt null means the set is outstanding, which PatternDrillsService
+// uses to withhold fresh material until the candidate submits it.
+model PatternDrillSet {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  coveredPatterns Json      @map("covered_patterns")
+  items           Json
+  submission      Json?
+  gradedResult    Json?     @map("graded_result")
+  submittedAt     DateTime? @map("submitted_at")
+  // User-controlled tracking, independent of the LLM-graded verdict above:
+  // Record<itemId, 'pending' | 'solved' | 'in_progress'>. Editable any time,
+  // even on a submitted/locked set — this is personal review status, not
+  // part of grading. Absent key defaults to 'pending' on the frontend.
+  manualStatus    Json?     @map("manual_status")
+
+  @@index([userId, createdAt])
+  @@map("pattern_drill_sets")
 }
 
 model FinalArtifacts {

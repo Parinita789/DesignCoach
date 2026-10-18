@@ -12,6 +12,9 @@ export default () => ({
     version: process.env.RUBRIC_VERSION ?? 'v3.0',
     dir: process.env.RUBRIC_DIR ?? './rubrics',
   },
+  patternDrill: {
+    bankPath: process.env.PATTERN_DRILL_BANK_PATH ?? './pattern-drills/bank.yaml',
+  },
   claudeCode: {
     projectsDir: process.env.CLAUDE_CODE_PROJECTS_DIR,
   },

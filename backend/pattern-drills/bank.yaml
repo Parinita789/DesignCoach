@@ -1,0 +1,294 @@
+# Pattern-drill content bank. Flat list, no versioning (personal-use content;
+# git history is the version history). Each entry is a real, disguised/paraphrased
+# problem with a hand-authored canonical answer — the LLM only grades the
+# candidate's free-text answer against this ground truth, it never invents
+# problem content itself.
+#
+# difficulty (optional: easy | medium | hard, default medium): drives weighted
+# selection in selectItemsByHistory — hard items are picked more often than
+# easy ones, so a day's set leans toward problems that actually test
+# understanding rather than always the same foundational examples.
+#
+# boundaryPairWith (optional list): pattern(s) this problem is easily confused
+# with. The drill picker prioritizes pulling both patterns of a pair into the
+# same set so the candidate practices "not X, it's Y" instead of pattern-
+# matching on whatever was studied most recently. A problem can have more
+# than one confusable pattern (e.g. two_pointers-sorted-two-sum below is a
+# trap for both "just binary search it" and "just hashmap it" instincts).
+#
+# Patterns without any items here yet (overlapping_intervals, binary_tree_
+# traversal, dfs, bfs, matrix_traversal, backtracking, dynamic_programming)
+# get seeded in later as the study plan reaches them — appending to this
+# file, no code change needed.
+
+- id: two_pointers-container-with-most-water
+  pattern: two_pointers
+  difficulty: medium
+  statement: >
+    You're given a row of vertical markers of varying heights. Choose any two
+    markers; together with the ground between them they form a container.
+    Maximize the amount of water the container can hold.
+  triggerPhrase: "unsorted heights, converge from both ends, always move the shorter side inward"
+  firstMove: "left = 0, right = n - 1; track max(area); move whichever side is shorter"
+
+- id: two_pointers-sorted-two-sum
+  pattern: two_pointers
+  difficulty: easy
+  statement: >
+    Given an array already sorted in ascending order, find the two entries that
+    add up to a given target and return their (1-indexed) positions.
+  triggerPhrase: "sorted array, converge from both ends based on comparison to the target — the sortedness is what lets you skip the hashmap and hit O(1) space"
+  firstMove: "left = 0, right = n - 1; if sum < target, left++; if sum > target, right--; else return"
+  boundaryPairWith: [modified_binary_search, hashmap_set]
+
+- id: two_pointers-3sum
+  pattern: two_pointers
+  difficulty: medium
+  statement: >
+    Given an array of integers, find every unique triplet that sums to zero.
+  triggerPhrase: "sort first, fix one element, two-pointer the remainder for the other two"
+  firstMove: "sort nums; for each i, two-pointer left = i + 1, right = n - 1 searching for -nums[i]"
+
+- id: two_pointers-trapping-rain-water
+  pattern: two_pointers
+  difficulty: hard
+  statement: >
+    Given a row of vertical markers of varying heights, compute how much
+    water would be trapped above them after it rains — water can only sit
+    where there's a taller marker on both sides.
+  triggerPhrase: "each position's trapped water depends on min(maxLeft, maxRight) minus its own height — converge two pointers tracking running max from each side, resolving the smaller side first since it's the one that's bounded"
+  firstMove: "left = 0, right = n - 1, leftMax = rightMax = 0; while left < right: if height[left] < height[right], update leftMax and add leftMax - height[left] to the total, then left++; else the symmetric move on the right side"
+
+- id: hashmap_set-two-sum-unsorted
+  pattern: hashmap_set
+  difficulty: easy
+  statement: >
+    Given an array of integers in no particular order, find the two entries
+    that add up to a given target and return their indices.
+  triggerPhrase: "need O(1) lookup of a complement, no sorted-order guarantee — hashmap of value to index"
+  firstMove: "seen = {}; for i, num in enumerate(nums): if (target - num) in seen: return [seen[target - num], i]; seen[num] = i"
+  boundaryPairWith: [two_pointers]
+
+- id: hashmap_set-contains-duplicate
+  pattern: hashmap_set
+  difficulty: easy
+  statement: >
+    Given an array, determine whether any value appears more than once.
+  triggerPhrase: "just need an existence/seen-before check, no ordering or counting needed — a set"
+  firstMove: "seen = set(); for num in nums: if num in seen: return true; seen.add(num); return false"
+
+- id: hashmap_set-longest-consecutive-sequence
+  pattern: hashmap_set
+  difficulty: hard
+  statement: >
+    Given an unsorted array of integers, find the length of the longest run
+    of consecutive integers present in the array (in any order), in O(n) time.
+  triggerPhrase: "need O(n), so no sorting — put everything in a set, then only start counting a run from numbers that are true run-starts (n - 1 not in the set), so each number gets visited at most twice overall"
+  firstMove: "nums_set = set(nums); best = 0; for n in nums_set: if n - 1 not in nums_set: length = 1; while n + length in nums_set: length++; best = max(best, length)"
+
+- id: sliding_window-longest-unique-substring
+  pattern: sliding_window
+  difficulty: medium
+  statement: >
+    Given a string, find the length of the longest contiguous stretch that
+    contains no repeated characters.
+  triggerPhrase: "contiguous substring with a running validity condition — expand right, shrink left while invalid"
+  firstMove: "right expands adding to a seen-set; while the new char is a duplicate, shrink left and remove from the set"
+
+- id: sliding_window-min-size-subarray-sum
+  pattern: sliding_window
+  difficulty: medium
+  statement: >
+    Given an array of positive integers and a target sum, find the length of
+    the shortest contiguous subarray whose sum is at least the target.
+  triggerPhrase: "all-positive array, contiguous subarray meeting a sum threshold — expand right, shrink left while still valid"
+  firstMove: "expand right adding to a running sum; while sum >= target, record the length and shrink left"
+
+- id: sliding_window-permutation-in-string
+  pattern: sliding_window
+  difficulty: medium
+  statement: >
+    Given two strings, determine whether the second contains a contiguous
+    substring that is some rearrangement of the first.
+  triggerPhrase: "fixed-size window, compare character-count maps as the window slides"
+  firstMove: "build a frequency map of the first string; slide a same-length window over the second, comparing frequency maps"
+
+- id: sliding_window-minimum-window-substring
+  pattern: sliding_window
+  difficulty: hard
+  statement: >
+    Given two strings, find the smallest contiguous substring of the first
+    that contains every character of the second (counting duplicates). Return
+    empty if no such substring exists.
+  triggerPhrase: "variable-size window that must satisfy a multi-character coverage condition, not just one constraint — expand right until fully valid, then greedily shrink left while it stays valid, tracking the smallest valid window seen"
+  firstMove: "need = frequency map of target string, have = {}, missing = len(target); expand right updating have/missing; once missing == 0, shrink left while still valid, updating best window each time before it breaks"
+
+- id: prefix_sum-subarray-sum-equals-k
+  pattern: prefix_sum
+  difficulty: medium
+  statement: >
+    Given an array of integers (positive, negative, or zero) and a target k,
+    count how many contiguous subarrays sum to exactly k.
+  triggerPhrase: "array may include negatives — running prefix sum plus a hashmap of sums seen so far, not a sliding window"
+  firstMove: "runningSum = 0, seen = {0: 1}; for each num: runningSum += num; count += seen[runningSum - k]; seen[runningSum]++"
+  boundaryPairWith: [sliding_window]
+
+- id: prefix_sum-range-sum-query-immutable
+  pattern: prefix_sum
+  difficulty: easy
+  statement: >
+    You'll be given a fixed array and asked many times for the sum of the
+    elements between two indices. Answer each query as fast as possible.
+  triggerPhrase: "many repeated range-sum queries on a static array — precompute prefix sums once, answer each query in O(1)"
+  firstMove: "prefix[0] = 0; prefix[i] = prefix[i-1] + nums[i-1]; query(l, r) = prefix[r+1] - prefix[l]"
+
+- id: prefix_sum-continuous-subarray-sum
+  pattern: prefix_sum
+  difficulty: medium
+  statement: >
+    Given an array of non-negative integers and an integer k, determine
+    whether the array has a contiguous subarray of size at least two whose
+    sum is a multiple of k.
+  triggerPhrase: "subarray sum divisible by k — prefix sum mod k, look for a repeated remainder at least two apart"
+  firstMove: "runningSum = 0, firstSeenAt = {0: -1}; for each index i: runningSum += nums[i]; rem = runningSum % k; if rem seen before at distance >= 2, return true; else record first-seen index for rem"
+
+- id: prefix_sum-count-of-range-sum
+  pattern: prefix_sum
+  difficulty: hard
+  statement: >
+    Given an array of integers and a lower/upper bound, count how many
+    contiguous subarrays have a sum that falls within [lower, upper]
+    (inclusive), where the array can contain negative numbers.
+  triggerPhrase: "it's a range condition on the subarray sum, not an exact-match — a plain hashmap of prefix sums only counts exact equality, so this needs counting how many earlier prefix sums fall in an interval, via merge-sort-with-counting or a Fenwick tree over the prefix sums"
+  firstMove: "compute the prefix sum array; then, merging two sorted halves (mergesort-style), for each prefix sum on the right count how many prefix sums on the left fall within [value - upper, value - lower] using a moving two-pointer window, before merging the halves back together"
+
+- id: modified_binary_search-rotated-array-search
+  pattern: modified_binary_search
+  difficulty: medium
+  statement: >
+    Given a sorted array that has been rotated at an unknown pivot, and a
+    target value, find its index (or report it's absent) faster than linear scan.
+  triggerPhrase: "rotated sorted array — binary search, but first determine which half is properly sorted"
+  firstMove: "mid = (l + r) / 2; if nums[l] <= nums[mid], the left half is sorted, else the right half is; check whether target falls in the sorted half's range to decide which side to keep"
+
+- id: modified_binary_search-find-minimum-rotated
+  pattern: modified_binary_search
+  difficulty: medium
+  statement: >
+    Given a sorted array rotated at an unknown pivot, find the minimum element,
+    faster than linear scan.
+  triggerPhrase: "rotated sorted array, find the pivot — binary search comparing mid against the right boundary"
+  firstMove: "if nums[mid] > nums[right], the minimum is to the right of mid, else it's mid or to the left"
+
+- id: modified_binary_search-first-last-position
+  pattern: modified_binary_search
+  difficulty: medium
+  statement: >
+    Given a sorted array with duplicates and a target value, find the first
+    and last index at which the target appears.
+  triggerPhrase: "sorted array, find a boundary/first-or-last occurrence — binary search twice, biasing left or right on ties"
+  firstMove: "run a left-biased binary search for the first occurrence, then a right-biased one for the last"
+  boundaryPairWith: [two_pointers]
+
+- id: modified_binary_search-median-of-two-sorted-arrays
+  pattern: modified_binary_search
+  difficulty: hard
+  statement: >
+    Given two sorted arrays of possibly different lengths, find the median of
+    the combined set of all their elements, in better than linear time.
+  triggerPhrase: "need better than O(n) on a merge, and it's really a partition problem, not a search-for-a-value problem — binary search on WHERE to cut the smaller array so the left/right partitions across both arrays balance in size and in value"
+  firstMove: "binary search a cut point in the smaller array; derive the matching cut point in the larger array from the total-left-size needed; check that the left-side maxes are <= the right-side mins on both arrays, adjusting the cut via binary search until that holds"
+
+- id: fast_slow-cycle-detection
+  pattern: fast_slow_pointers
+  difficulty: medium
+  statement: >
+    Given the head of a linked list, determine whether it contains a cycle,
+    and if so, return the node where the cycle begins.
+  triggerPhrase: "linked list, detect/locate a cycle — slow/fast pointers (Floyd's), then reset one to head to find the start"
+  firstMove: "slow = head, fast = head; advance slow one step and fast two steps until they meet or fast hits null; on meeting, reset slow to head and advance both one step at a time to find the cycle start"
+
+- id: fast_slow-happy-number
+  pattern: fast_slow_pointers
+  difficulty: easy
+  statement: >
+    Define a process that repeatedly replaces a number with the sum of the
+    squares of its digits. Determine whether this process reaches 1, or
+    loops forever without reaching it.
+  triggerPhrase: "a value evolving via a function that might cycle instead of terminating — treat it like a linked list and run slow/fast pointers to detect the cycle"
+  firstMove: "slow = start, fast = next(start); advance slow by the function once, fast twice; they meet if there's a cycle; check whether that meeting value is 1"
+
+- id: fast_slow-find-the-duplicate-number
+  pattern: fast_slow_pointers
+  difficulty: hard
+  statement: >
+    Given an array of n + 1 integers where every value is between 1 and n
+    inclusive, find the one duplicated value — without modifying the array
+    and using only O(1) extra space.
+  triggerPhrase: "no extra space rules out a set/hashmap, and the constraint (values 1..n, one extra slot) means treating each index as a pointer to nums[index] builds an implicit linked list with a cycle at the duplicate — this is Floyd's applied where there's no literal list at all, which is the whole trap"
+  firstMove: "slow = nums[0], fast = nums[nums[0]]; advance slow = nums[slow], fast = nums[nums[fast]] until they meet; then reset slow to nums[0] and advance both one step at a time (following the same nums[x] pointer rule) until they meet again — that meeting point is the duplicate"
+
+- id: reversal-reverse-linked-list
+  pattern: linked_list_reversal
+  difficulty: easy
+  statement: >
+    Given the head of a singly linked list, reverse the list in place and
+    return the new head.
+  triggerPhrase: "reverse a linked list in place — walk with prev/curr, flip next pointers one at a time"
+  firstMove: "prev = null, curr = head; while curr: next = curr.next; curr.next = prev; prev = curr; curr = next"
+
+- id: reversal-reverse-sublist
+  pattern: linked_list_reversal
+  difficulty: medium
+  statement: >
+    Given the head of a singly linked list and two positions, reverse only the
+    nodes between those two positions (inclusive), leaving the rest of the
+    list untouched.
+  triggerPhrase: "reverse only a sublist/range in place — locate the boundary nodes first, reverse just that segment, then reconnect"
+  firstMove: "walk to the node just before the start position; reverse the sublist with prev/curr; reconnect prev.next and the reversed segment's tail to what follows"
+
+- id: reversal-reverse-nodes-in-k-group
+  pattern: linked_list_reversal
+  difficulty: hard
+  statement: >
+    Given the head of a linked list, reverse the nodes k at a time and return
+    the new head. If the number of nodes remaining is less than k at the end,
+    leave that final group as-is.
+  triggerPhrase: "it's the same in-place reversal move, just chained group by group — first check a full group of k exists before reversing it (so the leftover tail is skipped), then reverse that group and stitch its new head/tail to the previous group's tail and the next group's start, recursing/looping on what follows"
+  firstMove: "walk k nodes ahead to confirm a full group exists (else return head as-is); reverse just those k nodes with the standard prev/curr loop; recursively reverse the remainder starting after the group, then point the current group's original head (now the tail) at that reversed remainder, and return the group's new head"
+
+- id: monostack-daily-temperatures
+  pattern: monotonic_stack
+  difficulty: medium
+  statement: >
+    Given a list of daily readings, for each day find how many days you'd
+    have to wait until a strictly higher reading occurs (0 if never).
+  triggerPhrase: "next greater element for every position — maintain a decreasing stack of indices, pop while the current value beats the stack's top"
+  firstMove: "stack = []; for i, val in enumerate(arr): while stack and val > arr[stack.top]: idx = stack.pop(); result[idx] = i - idx; stack.push(i)"
+
+- id: monostack-largest-rectangle-in-histogram
+  pattern: monotonic_stack
+  difficulty: hard
+  statement: >
+    Given a row of bars of varying heights, all the same width, find the area
+    of the largest rectangle that can be formed within the row.
+  triggerPhrase: "for every bar, the biggest rectangle using its height extends left and right until a shorter bar blocks it — an increasing stack of indices tells you, the instant a shorter bar appears, exactly how far the popped bar's rectangle could extend on both sides"
+  firstMove: "stack = []; for i, h in enumerate(heights + [0]): while stack and heights[stack.top] > h: height = heights[stack.pop()]; width = i if stack is empty else i - stack.top - 1; best = max(best, height * width); stack.push(i)"
+
+- id: topk-kth-largest
+  pattern: top_k_heap
+  difficulty: medium
+  statement: >
+    Given an unsorted array and an integer k, find the kth largest element
+    without fully sorting the array.
+  triggerPhrase: "find the kth largest/smallest without a full sort — maintain a size-k min-heap"
+  firstMove: "push the first k elements into a min-heap; for each remaining element, if it beats the heap's min, pop and push it in; the heap's min is the answer"
+
+- id: topk-find-median-from-data-stream
+  pattern: top_k_heap
+  difficulty: hard
+  statement: >
+    Design a structure that supports adding numbers one at a time from a
+    stream and, at any point, can return the median of all numbers seen so far.
+  triggerPhrase: "the boundary between the two data streams is what you need fast access to, not the top-k of one stream — keep a max-heap for the lower half and a min-heap for the upper half, rebalanced so their sizes never differ by more than one; the median is then one or both heap tops"
+  firstMove: "on add(num): push to the max-heap if num <= max-heap top (or it's empty), else to the min-heap; then rebalance by moving the top of whichever heap is more than one larger into the other heap; median is the top of the larger heap, or the average of both tops if equal size"

@@ -89,7 +89,7 @@ export function SessionStartPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5">
       <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-gray-100 bg-gradient-to-r from-white via-slate-50 to-teal-50 px-5 py-5 text-gray-950 dark:from-gray-950 dark:via-slate-800 dark:to-teal-900 dark:text-white lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 border-b border-emerald-100 bg-gradient-to-r from-emerald-50 via-teal-50 to-green-100 px-5 py-5 text-gray-950 dark:border-emerald-800/70 dark:from-emerald-800 dark:via-teal-800 dark:to-green-800 dark:text-white lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Sharpen the next system design round</h1>
             <p className="mt-1 max-w-2xl text-sm text-gray-600 dark:text-teal-100">
