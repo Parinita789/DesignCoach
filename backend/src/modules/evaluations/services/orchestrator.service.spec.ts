@@ -467,6 +467,27 @@ describe('OrchestratorService.run content-based caching', () => {
     expect(t.queue.enqueuePlanDetails).not.toHaveBeenCalled();
   });
 
+  it('re-enqueues Call B for a cached row whose details previously failed', async () => {
+    const t = makeOrchestrator({});
+    t.evalsRepo.findByFingerprint.mockResolvedValueOnce({
+      id: 'cached-eid',
+      sessionId: SID,
+      phase: 'plan',
+      inputFingerprint: 'cached-fp',
+      score: 3,
+      detailsCompletedAt: null,
+      detailsError: 'LLM call exceeded 90000ms',
+    });
+
+    await t.svc.run(SID, ['plan']);
+
+    expect(t.planAgent.evaluateResults).not.toHaveBeenCalled();
+    expect(t.queue.enqueuePlanDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ evaluationId: 'cached-eid', sessionId: SID }),
+    );
+    expect(t.queue.enqueueMentor).not.toHaveBeenCalled();
+  });
+
   it('runs Call A normally on cache miss (findByFingerprint returns null)', async () => {
     const t = makeOrchestrator({});
     await t.svc.run(SID, ['plan']);

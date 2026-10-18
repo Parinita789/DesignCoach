@@ -396,9 +396,11 @@ export class OrchestratorService {
 
     if (cached.phase === 'plan') {
       await this.queue.enqueueSignalMentor(payload);
-      if (!cached.detailsCompletedAt && !cached.detailsError) {
+      // A row with detailsError is still missing its details, so retry
+      // Call B; enqueuePlanDetails no-ops if an attempt is still pending.
+      if (!cached.detailsCompletedAt) {
         await this.queue.enqueuePlanDetails(payload);
-      } else if (cached.detailsCompletedAt) {
+      } else {
         await this.queue.enqueueMentor(payload);
       }
       return;
