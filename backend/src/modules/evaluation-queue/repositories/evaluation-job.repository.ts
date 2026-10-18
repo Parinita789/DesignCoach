@@ -64,6 +64,17 @@ export class EvaluationJobRepository {
     });
   }
 
+  markRetrying(id: string, attempts: number, error: string) {
+    return this.prisma.evaluationJob.update({
+      where: { id },
+      data: {
+        state: EvaluationJobState.queued,
+        attempts,
+        lastError: truncate(error),
+      },
+    });
+  }
+
   markFailed(id: string, attempts: number, error: string) {
     return this.prisma.evaluationJob.update({
       where: { id },

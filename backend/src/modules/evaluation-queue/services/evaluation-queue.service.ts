@@ -122,11 +122,12 @@ export class EvaluationQueueService implements OnApplicationShutdown {
     });
     worker.on('failed', (job, err) => {
       if (!job) return;
-      this.jobs
-        .markFailed(job.id!, job.attemptsMade, err.message)
-        .catch((writeErr) =>
-          this.logger.warn(`Failed to mark job ${job.id} failed: ${writeErr.message}`),
-        );
+      const write = willRetry(job.attemptsMade, job.opts.attempts)
+        ? this.jobs.markRetrying(job.id!, job.attemptsMade, err.message)
+        : this.jobs.markFailed(job.id!, job.attemptsMade, err.message);
+      write.catch((writeErr) =>
+        this.logger.warn(`Failed to record failure for job ${job.id}: ${writeErr.message}`),
+      );
     });
     worker.on('error', (err) => {
       this.logger.error(`BullMQ worker error (${name}): ${err.message}`, err.stack);
@@ -228,6 +229,13 @@ export function queueName(type: EvaluationJobType): string {
 
 export function jobIdFor(prefix: string, parts: string[]): string {
   return [prefix, ...parts].map((part) => part.replace(/:/g, '_')).join('__');
+}
+
+// BullMQ emits the worker 'failed' event after every failed attempt,
+// including ones it is about to retry, and has already incremented
+// attemptsMade by then.
+export function willRetry(attemptsMade: number, maxAttempts: number | undefined): boolean {
+  return attemptsMade < (maxAttempts ?? 1);
 }
 
 export function shouldRemoveExistingJob(

@@ -233,7 +233,10 @@ unchanged. Two-call refactor for build is deferred.
 uses `refetchInterval` to poll every 3s while the most-recent plan row
 has neither `detailsCompletedAt` nor `detailsError` AND is younger than
 5min, and while an eval was queued but no newer row exists yet.
-Stops once one of them lands. `evaluationJobsQuery` polls
+Stops once one of them lands, except that a `detailsError` keeps it
+polling while that eval's `plan-details` job is still queued or running
+(a retry may clear it). Retries between attempts are recorded as
+`queued`, not `failed`, in `evaluation_jobs`. `evaluationJobsQuery` polls
 `GET /sessions/:id/evaluation-jobs` every 3s while any job is `queued`
 or `running`. `PlanEvaluationView` renders score +
 signals immediately from Call A; `DetailsPendingSkeleton` placeholders

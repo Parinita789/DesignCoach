@@ -1,5 +1,10 @@
 import { EVALUATION_JOB_TYPES } from '../evaluation-queue.constants';
-import { jobIdFor, queueName, shouldRemoveExistingJob } from './evaluation-queue.service';
+import {
+  jobIdFor,
+  queueName,
+  shouldRemoveExistingJob,
+  willRetry,
+} from './evaluation-queue.service';
 
 describe('EvaluationQueueService identifiers', () => {
   it('uses BullMQ-safe queue names and custom job ids', () => {
@@ -31,5 +36,20 @@ describe('EvaluationQueueService duplicate handling', () => {
   it('always removes failed jobs before re-enqueue', async () => {
     expect(shouldRemoveExistingJob('failed', true)).toBe(true);
     expect(shouldRemoveExistingJob('failed', false)).toBe(true);
+  });
+});
+
+describe('EvaluationQueueService retry detection', () => {
+  it('treats a failed attempt with attempts remaining as a pending retry', () => {
+    expect(willRetry(1, 3)).toBe(true);
+    expect(willRetry(2, 3)).toBe(true);
+  });
+
+  it('treats the last attempt as a terminal failure', () => {
+    expect(willRetry(3, 3)).toBe(false);
+  });
+
+  it('treats a job without an attempts option as single-attempt', () => {
+    expect(willRetry(1, undefined)).toBe(false);
   });
 });
