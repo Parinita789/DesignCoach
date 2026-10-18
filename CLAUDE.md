@@ -66,7 +66,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 Three runnable packages, each independently testable:
 
-- `backend/` — NestJS 10 / Prisma / PostgreSQL. 12 modules. Owns rubrics
+- `backend/` — NestJS 10 / Prisma / PostgreSQL / BullMQ on Redis. 20 modules. Owns rubrics
   (under `backend/rubrics/v*/`) + the eval harness (`backend/eval-harness/`).
 - `frontend/` — React 18 + Vite + Monaco + TanStack Query. Auth state in
   Zustand. Talks to backend at `VITE_API_BASE_URL` (default proxies to :3000).
@@ -135,16 +135,33 @@ that flow makes the rest of the codebase obvious.
 ### Backend module DAG
 
 Modules under `backend/src/modules/` form an explicit DAG — **no
-`forwardRef` anywhere** (see Project conventions below). Two patterns
+`forwardRef` anywhere** (see Project conventions below). Three patterns
 break cycles:
 
 1. **Extract a leaf data module.** `session-read/` and
    `build-sessions-data/` exist so the orchestrator can read a session
    without depending on `sessions/` (which depends on most of the world).
-2. **Reverse the edge with an event.** `EvaluationCompletedEvent` and
-   `PlanEvalDetailsCompletedEvent` (in `backend/src/common/events/`) let
-   the orchestrator notify mentor + signal-mentor without importing
-   them. See `@OnEvent` decorators.
+2. **Reverse the edge with a queue job.** The orchestrator enqueues
+   `mentor` / `signal-mentor` jobs through the leaf `evaluation-queue/`
+   module; the workers live in `mentor/workers/` and
+   `signal-mentor/workers/`, so the orchestrator never imports them.
+3. **Reverse the edge with an event.** `EvaluationCompletedEvent` and
+   `PlanEvalDetailsCompletedEvent` (in `backend/src/common/events/`)
+   notify in-process listeners such as the dashboard feedback
+   projection. See `@OnEvent` decorators.
+
+### Evaluation queue
+
+All evaluation work runs as BullMQ jobs on Redis (`REDIS_URL`, or
+`REDIS_HOST`/`REDIS_PORT`). `evaluation-queue/` owns one queue per job
+type (`plan-score`, `plan-details`, `build-evaluation`, `mentor`,
+`signal-mentor`): 3 attempts, exponential backoff, failed jobs retained.
+Job IDs are deterministic (`session + model + fingerprint` for phase
+jobs, `evaluationId` for follow-ups), so re-enqueuing an active job is a
+no-op. Every job is mirrored to the `evaluation_jobs` table, which the
+frontend and status endpoints read. `BackgroundTaskTracker` is only for
+loss-tolerant in-process work (artifact cleanup, feedback projection).
+See `decisions.md` §3.
 
 ### LLM provider factory
 
@@ -185,14 +202,18 @@ long-running call is observable instead of silent.
   (which may downgrade signals + re-compute score) and returns the
   finalized payload. ~30-90s on opus.
 
-The orchestrator (`OrchestratorService.runPlanPhase`) persists the Call A
-row immediately, emits `EvaluationCompletedEvent` (signal-mentor fires),
-returns to the HTTP caller, then `tasks.track(evaluateDetailsAndPersist)`
-runs Call B in the background. When Call B completes, the row is patched
-via `EvaluationsRepository.patchDetails` and `PlanEvalDetailsCompletedEvent`
-fires (deep-dive mentor listens to this). On Call B failure (timeout,
-cost-cap, parse error), the row gets `details_error` via
-`markDetailsError` instead — the frontend renders a banner.
+`POST /sessions/:sessionId/evaluate` (and session end) only enqueues a
+`plan-score` job and returns `{ status: 'queued', jobIds }`. The
+`PlanScoreWorker` calls `OrchestratorService.run`, which skips the LLM
+entirely if an eval with the same input fingerprint exists. Otherwise
+`runPlanPhase` persists the Call A row, emits `EvaluationCompletedEvent`,
+and enqueues `signal-mentor` + `plan-details` jobs. `PlanDetailsWorker`
+runs Call B via `runPlanDetailsForEvaluation`; on success the row is
+patched via `EvaluationsRepository.patchDetails`, a `mentor` job is
+enqueued (deep-dive mentor), and `PlanEvalDetailsCompletedEvent` fires.
+On Call B failure (timeout, cost-cap, parse error), the row gets
+`details_error` via `markDetailsError` and the error is rethrown so
+BullMQ retries; a later successful attempt overwrites it.
 
 **Call B's prompt is verbatim-quote-sensitive.** The evidence validator
 checks every quoted snippet against `plan.md` + hint history by 30-char
@@ -211,7 +232,10 @@ unchanged. Two-call refactor for build is deferred.
 `evalsQuery` (`frontend/src/pages/SessionResults/SessionResultsPage.tsx`)
 uses `refetchInterval` to poll every 3s while the most-recent plan row
 has neither `detailsCompletedAt` nor `detailsError` AND is younger than
-5min. Stops once one of them lands. `PlanEvaluationView` renders score +
+5min, and while an eval was queued but no newer row exists yet.
+Stops once one of them lands. `evaluationJobsQuery` polls
+`GET /sessions/:id/evaluation-jobs` every 3s while any job is `queued`
+or `running`. `PlanEvaluationView` renders score +
 signals immediately from Call A; `DetailsPendingSkeleton` placeholders
 fill the feedback/top_actions/gap_topics slots until Call B patches the
 row, or an amber banner shows the `detailsError`. Signal-mentor + deep-
@@ -356,5 +380,5 @@ revert.
 | Deferred structural work | `architectural-followups.md` |
 | Local gaps + tech debt | `gaps.md` (gitignored — local working notes) |
 | LLM tunables (per-agent + per-model) | `backend/src/config/llm-tunables.config.ts` |
-| Rubric YAMLs (per variant) | `backend/rubrics/v2.0/plan.{traditional,agentic}_design.yaml`, `plan.agentic_build.yaml` |
+| Rubric YAMLs (per variant) | `backend/rubrics/v3.0/plan.{traditional,agentic}_design.yaml`, `plan.agentic_build.yaml` (v3.0 is the default) |
 | Eval-harness usage + fixture format | `backend/eval-harness/README.md` |

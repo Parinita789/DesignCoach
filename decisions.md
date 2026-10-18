@@ -96,33 +96,36 @@ End of session
 
 ---
 
-### Decision: In-process Promise.all orchestration, not a queue
+### Decision: BullMQ (Redis) queue for evaluation work
 
-**Why:**
-- Single user, bounded workload, known set of agents — none of the conditions that make queues valuable.
-- Backend orchestrator fires LLM calls in parallel via `Promise.all`, awaits all, then runs synthesizer.
-- Adding a queue (Redis, SQS, BullMQ) would be over-engineering at this scale.
+**Pivoted from:** "*In-process `Promise.all` orchestration, not a queue.*" At the time: single user, bounded workload, one fast agent. Background work (Call B, mentors) then ran via `BackgroundTaskTracker.track(...)` in process memory.
 
-**Agent <-> orchestrator transport:**
-- The phase agents and synthesizer are NestJS singletons in the same Node process. `await agent.evaluate(...)` is an in-process method call; the returned `PhaseEvaluationResult` is an object reference in the same V8 heap, not an HTTP response.
-- The only HTTP on the evaluation path is each agent's outbound call to the Anthropic API. Inputs (artifacts, tagged JSONL entries, rubric) are gathered once by the orchestrator and passed to each agent by reference — no copying, no serialization.
+**Why the pivot:** the "when this would change" triggers from the original decision all fired.
+- Multiple users: auth, per-user cost cap, and rate limits landed, so concurrent evaluations are normal.
+- Latency: Call B runs 30–90s on opus, the build eval longer, so the work can't sit inside an HTTP request.
+- Durability: in-process tasks were lost on a crash, OOM kill or deploy (see the `BackgroundTaskTracker` header comment). The mentor and details outputs were promised to the user but had nothing to replay from.
 
-**When this would change:**
-- Multiple users with backpressure needs.
-- Per-call latency exceeding HTTP timeout (>60s).
-- Need for distributed agents across machines.
+**Shape:**
+- `evaluation-queue/` is a leaf module. There is one BullMQ queue per job type: `plan-score`, `plan-details`, `build-evaluation`, `mentor`, `signal-mentor`. Workers register from the module that owns the work (`evaluations/workers/`, `mentor/workers/`, `signal-mentor/workers/`), so the orchestrator enqueues by job type without importing those modules.
+- Jobs get 3 attempts with exponential backoff (5s base). Failed jobs are kept for inspection; completed jobs are kept for 7 days.
+- Job IDs are deterministic. Phase jobs key on `session + resolved model + input fingerprint`; follow-up jobs key on `evaluationId`. Re-enqueuing work that is already queued or running is a no-op. A failed job can be re-run, and a completed phase job can be re-run after its input changes.
+- Each job is mirrored to the `evaluation_jobs` Postgres table (`queued | running | completed | failed`, attempts, last error). The UI and `GET /evaluation-jobs/:jobId/status` read this table instead of querying Redis.
+
+**Still in process:** `BackgroundTaskTracker` remains for work whose loss is tolerable (artifact disk cleanup after deletes, dashboard feedback projection refresh).
+
+**Tradeoff accepted:** Redis is now a runtime dependency, and job state lives in two places. The Postgres mirror writes are best-effort (logged on failure), so it can briefly disagree with BullMQ.
 
 ---
 
-### Decision: Synchronous end-of-session evaluation (single call)
+### Decision: Queued end-of-session evaluation with frontend polling
 
-**Pivoted from:** "*Async polling pattern — `POST /sessions/:id/end` returns immediately, frontend polls `GET /evaluations/:id/status`.*"
+**Pivoted from:** "*Synchronous end-of-session evaluation (single call).*" That version made sense while only Plan ran, in one 3–10s call. It was itself a pivot away from an earlier async-polling design.
 
-**Why the pivot:**
-- Only one phase agent runs today (Plan), so the wall-clock budget is one Anthropic call (3–10s with caching). That's well under HTTP timeout.
-- Polling adds frontend complexity (query loops, cancel-on-unmount, intermediate UI) for no win at this latency.
-- `POST /sessions/:id/end` now returns `EndSessionResult { session, evaluations[], evalError }` directly. The frontend awaits the response and routes to `SessionResultsPage`.
-- The async pattern can return when the build/validate/wrap agents come online and the wall-clock budget grows. The status endpoint (`GET /evaluations/:id/status`) is preserved as a stub returning `{ state: 'complete' }`.
+**Why the pivot back to async:** the two-call plan split (§3, Call B at 30–90s), the build eval and the mentor passes pushed the wall-clock budget well past an HTTP request. The queue (decision above) made async the natural shape.
+
+- `POST /sessions/:id/end` and `POST /sessions/:sessionId/evaluate` enqueue jobs. They return `{ evaluationJobs: jobIds }` and `{ status: 'queued', jobIds }` respectively.
+- `SessionResultsPage` polls `GET /sessions/:id/evaluations` and `GET /sessions/:id/evaluation-jobs` every 3s. It stops when the jobs are no longer queued or running, when the latest plan row has `detailsCompletedAt` or `detailsError`, or after a 5-minute ceiling.
+- `GET /evaluations/:id/status` is no longer a stub. It returns the latest job state plus `detailsState` (`pending | completed | failed`).
 
 ---
 
